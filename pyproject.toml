@@ -1,0 +1,18 @@
+[project]
+name = "provisioning-consumer"
+version = "0.1.0"
+description = "A Provisioning consumer"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27.0",
+]
+
+[project.scripts]
+provisioning-consumer = "provisioning_consumer.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/provisioning_consumer"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
