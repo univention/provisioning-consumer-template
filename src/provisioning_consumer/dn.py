@@ -54,7 +54,7 @@ class DN:  # TODO FIXME copied from univention-python (univention.DN)
         """
         return tuple(self._dn[0][0][:2])
 
-    def __eq__(self, other: "DN") -> bool:
+    def __eq__(self, other: object, /) -> bool:
         """
         >>> DN('foo=1') == DN('foo=1')
         True
@@ -83,7 +83,7 @@ class DN:  # TODO FIXME copied from univention-python (univention.DN)
         """
         return hash(self) == hash(other)
 
-    def __ne__(self, other: "DN") -> bool:
+    def __ne__(self, other: object, /) -> bool:
         return not self == other
 
     def __hash__(self) -> int:
