@@ -135,6 +135,21 @@ class TestUDMEventHandler:
         with pytest.raises(TypeError):
             UDMEventHandler.diff(event)
 
+    def test_event_to_udm_missing_body_raises_key_error(self, mock_logger):
+        event = {
+            "uuid": "test-uuid",
+            "timestamp": "2026-01-01T00:00:00Z",
+        }
+        with pytest.raises(KeyError):
+            UDMEventHandler._event_to_udm(event)
+
+    def test_handle_event_with_move_modifies_attributes(self, ConcreteEventHandler, mock_logger, sample_move_event):
+        handler = ConcreteEventHandler(mock_logger)
+        handler.handle_event(sample_move_event)
+        assert handler.modify_called_with is not None
+        metadata, old, new, has_moved = handler.modify_called_with
+        assert has_moved is True
+
 
 class TestConsumerModuleInit:
     def test_init_requires_handler(self, mock_logger, config_dict):
@@ -231,6 +246,40 @@ class TestConsumerModuleCredentials:
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
             "config_path": str(tmp_path),
+        }
+        consumer = ConsumerModule(**config)
+        name, password = consumer._get_subscription_credentials()
+        assert name is None
+        assert password is None
+
+    def test_get_subscription_credentials_partial_config_missing_password(self, mock_logger, tmp_path):
+        config_path = str(tmp_path)
+        config_file = os.path.join(config_path, "config.json")
+        with open(config_file, "w") as f:
+            json.dump({"subscription_name": "only_name"}, f)
+
+        config = {
+            "name": "test-consumer",
+            "provisioning_url": "https://example.com",
+            "handler": MagicMock(),
+            "config_path": config_path,
+        }
+        consumer = ConsumerModule(**config)
+        name, password = consumer._get_subscription_credentials()
+        assert name is None
+        assert password is None
+
+    def test_get_subscription_credentials_partial_config_missing_name(self, mock_logger, tmp_path):
+        config_path = str(tmp_path)
+        config_file = os.path.join(config_path, "config.json")
+        with open(config_file, "w") as f:
+            json.dump({"subscription_password": "only_password"}, f)
+
+        config = {
+            "name": "test-consumer",
+            "provisioning_url": "https://example.com",
+            "handler": MagicMock(),
+            "config_path": config_path,
         }
         consumer = ConsumerModule(**config)
         name, password = consumer._get_subscription_credentials()
@@ -434,6 +483,28 @@ class TestConsumerModuleStep:
 
         mock_session.patch.assert_not_called()
 
+    def test_step_with_custom_long_polling_timeout(self, mock_logger, tmp_path, mock_session):
+        handler = MagicMock()
+        config = {
+            "name": "test-consumer",
+            "provisioning_url": "https://example.com",
+            "config_path": str(tmp_path),
+        }
+
+        mock_session.get.return_value.status_code = 200
+        mock_session.get.return_value.json.return_value = None
+
+        with patch("provisioning_consumer.consumer.requests.Session", return_value=mock_session):
+            consumer = ConsumerModule(handler, **config)
+            consumer.subscription_name = "test-sub"
+            consumer.subscription_password = "test-pass"
+
+            consumer.step(long_polling_timeout=30)
+
+        mock_session.get.assert_called_once()
+        call_args = mock_session.get.call_args
+        assert call_args[1]["params"]["timeout"] == 30
+
 
 class TestConsumerModuleFetchEvent:
     def test_fetch_event_raises_when_no_credentials(self, mock_logger, tmp_path, mock_session):
@@ -506,6 +577,63 @@ class TestConsumerModuleFetchEvent:
             with pytest.raises(QueueAccessError):
                 consumer._fetch_event(10)
 
+    def test_fetch_event_raises_on_400_bad_request(self, mock_logger, tmp_path, mock_session):
+        config = {
+            "name": "test-consumer",
+            "provisioning_url": "https://example.com",
+            "handler": MagicMock(),
+            "config_path": str(tmp_path),
+        }
+
+        mock_session.get.return_value.status_code = 400
+        mock_session.get.return_value.text = "Bad Request"
+
+        with patch("provisioning_consumer.consumer.requests.Session", return_value=mock_session):
+            consumer = ConsumerModule(**config)
+            consumer.subscription_name = "test-sub"
+            consumer.subscription_password = "test-pass"
+
+            with pytest.raises(QueueAccessError):
+                consumer._fetch_event(10)
+
+    def test_fetch_event_raises_on_403_forbidden(self, mock_logger, tmp_path, mock_session):
+        config = {
+            "name": "test-consumer",
+            "provisioning_url": "https://example.com",
+            "handler": MagicMock(),
+            "config_path": str(tmp_path),
+        }
+
+        mock_session.get.return_value.status_code = 403
+        mock_session.get.return_value.text = "Forbidden"
+
+        with patch("provisioning_consumer.consumer.requests.Session", return_value=mock_session):
+            consumer = ConsumerModule(**config)
+            consumer.subscription_name = "test-sub"
+            consumer.subscription_password = "test-pass"
+
+            with pytest.raises(QueueAccessError):
+                consumer._fetch_event(10)
+
+    def test_fetch_event_raises_on_404_not_found(self, mock_logger, tmp_path, mock_session):
+        config = {
+            "name": "test-consumer",
+            "provisioning_url": "https://example.com",
+            "handler": MagicMock(),
+            "config_path": str(tmp_path),
+        }
+
+        mock_session.get.return_value.status_code = 404
+        mock_session.get.return_value.text = "Not Found"
+
+        with patch("provisioning_consumer.consumer.requests.Session", return_value=mock_session):
+            consumer = ConsumerModule(**config)
+            consumer.subscription_name = "test-sub"
+            consumer.subscription_password = "test-pass"
+
+            with pytest.raises(QueueAccessError):
+                consumer._fetch_event(10)
+
 
 class TestConsumerModuleAcknowledgeEvent:
     def test_acknowledge_event_calls_correct_endpoint(self, mock_logger, tmp_path, mock_session):
@@ -556,54 +684,83 @@ class TestConsumerModuleAcknowledgeEvent:
 
         assert mock_response.status_code != 200
 
+    def test_acknowledge_event_missing_sequence_number(self, mock_logger, tmp_path, mock_session):
+        handler = MagicMock()
+        config = {
+            "name": "test-consumer",
+            "provisioning_url": "https://example.com",
+            "config_path": str(tmp_path),
+        }
 
-# class TestConsumerModuleLoop:
-#     def test_loop_calls_step_endlessly(self, mock_logger, tmp_path, mock_session):
-#         handler = MagicMock()
-#         config = {
-#             "name": "test-consumer",
-#             "provisioning_url": "https://example.com",
-#             "config_path": str(tmp_path),
-#         }
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_session.patch.return_value = mock_response
 
-#         call_count = 0
+        with patch("provisioning_consumer.consumer.requests.Session", return_value=mock_session):
+            consumer = ConsumerModule(handler, **config)
+            consumer.subscription_name = "test-sub"
+            consumer.subscription_password = "test-pass"
 
-#         def step_side_effect():
-#             nonlocal call_count
-#             call_count += 1
-#             if call_count >= 3:
-#                 raise SystemExit()
+            event = {}
+            with pytest.raises(KeyError):
+                consumer._acknowledge_event(event)
 
-#         consumer = ConsumerModule(handler, session=mock_session, **config)
-#         consumer.step = step_side_effect
 
-#         consumer.loop()
+class TestConsumerModuleLoop:
+    def test_loop_calls_step_endlessly(self, mock_logger, tmp_path, mock_session):
+        handler = MagicMock()
+        config = {
+            "name": "test-consumer",
+            "provisioning_url": "https://example.com",
+            "config_path": str(tmp_path),
+        }
 
-#         assert call_count == 3
+        call_count = 0
 
-#     def test_loop_sleeps_on_queue_access_error(self, mock_logger, tmp_path, mock_session):
-#         handler = MagicMock()
-#         config = {
-#             "name": "test-consumer",
-#             "provisioning_url": "https://example.com",
-#             "config_path": str(tmp_path),
-#         }
+        def step_side_effect():
+            nonlocal call_count
+            call_count += 1
+            if call_count >= 3:
+                raise SystemExit()
 
-#         call_count = 0
+        consumer = ConsumerModule(handler, session=mock_session, **config)
+        consumer.step = step_side_effect
 
-#         def step_side_effect():
-#             nonlocal call_count
-#             call_count += 1
-#             if call_count >= 2:
-#                 raise SystemExit()
-#             raise QueueAccessError("Queue access failed")
+        with pytest.raises(SystemExit):
+            consumer.loop()
 
-#         consumer = ConsumerModule(handler, session=mock_session, **config)
-#         consumer.step = step_side_effect
+        assert call_count == 3
 
-#         with patch("provisioning_consumer.consumer.time.sleep") as mock_sleep:
-#             consumer.loop()
+    def test_loop_sleeps_on_queue_access_error(self, tmp_path, mock_session):
+        handler = MagicMock()
 
-#         assert mock_sleep.call_count >= 1
-#         mock_logger.critical.assert_called()
-#         mock_logger.error.assert_called()
+        with patch("provisioning_consumer.consumer.getLogger") as mock_get_logger:
+            mock_consumer_logger = MagicMock()
+            mock_get_logger.return_value = mock_consumer_logger
+
+            config = {
+                "name": "test-consumer",
+                "provisioning_url": "https://example.com",
+                "config_path": str(tmp_path),
+            }
+
+            consumer = ConsumerModule(handler, session=mock_session, **config)
+
+            call_count = 0
+
+            def step_side_effect():
+                nonlocal call_count
+                call_count += 1
+                if call_count >= 2:
+                    raise SystemExit()
+                raise QueueAccessError("Queue access failed")
+
+            consumer.step = step_side_effect
+
+            with patch("provisioning_consumer.consumer.time.sleep") as mock_sleep:
+                with pytest.raises(SystemExit):
+                    consumer.loop()
+
+        assert mock_sleep.call_count >= 1
+        mock_consumer_logger.critical.assert_called()
+        mock_consumer_logger.error.assert_called()
