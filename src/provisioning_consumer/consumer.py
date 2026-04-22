@@ -164,10 +164,11 @@ class UDMEventHandler(EventHandler):
 
 
 class ConsumerModule:
-    def __init__(self, handler: EventHandler, *args, **kwargs):
+    def __init__(self, handler: EventHandler, session: requests.Session | None = None, *args, **kwargs):
         """
         ConsumerModule
         :param EventHandler handler:
+        :param requests.Session session: optional session for HTTP requests (for testing)
         :param kwargs:
            str config_path: path to configuration file
            str name: name of the consumer (has to be unique)
@@ -177,8 +178,8 @@ class ConsumerModule:
         self.config = kwargs
         self.check_config()
         self.logger = getLogger(self.config["name"])
-        self.logger.info(f"Starting consumer {self.config["name"]}")
-        self.session = requests.Session()
+        self.logger.info(f"Starting consumer {self.config['name']}")
+        self.session = session if session is not None else requests.Session()
         self.subscription_name, self.subscription_password = self._get_subscription_credentials()
 
     def check_config(self):
