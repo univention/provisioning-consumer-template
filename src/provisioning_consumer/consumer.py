@@ -12,7 +12,6 @@ from typing import Any, Mapping, Iterable, Tuple
 from logging import getLogger
 from .dn import DN
 
-import ldap
 import requests
 
 AttributeMapping = Mapping[str, Any]
@@ -244,7 +243,7 @@ class ConsumerModule:
         """
         self.subscription_name, self.subscription_password = self._get_subscription_credentials()
         if not self.subscription_name or not self.subscription_password:
-            self.subscription_name = f"{self.config["name"]}-{secrets.token_hex(16)}"
+            self.subscription_name = f"{self.config['name']}-{secrets.token_hex(16)}"
             self.subscription_password = secrets.token_urlsafe(32)
 
         create_sub_json = {
@@ -304,7 +303,7 @@ class ConsumerModule:
         if not self.subscription_name or not self.subscription_password:
             raise QueueAccessError("No subscription name or password")
         resp = self.session.get(
-            f"{self.config["provisioning_url"]}/v1/subscriptions/{self.subscription_name}/messages/next",
+            f"{self.config['provisioning_url']}/v1/subscriptions/{self.subscription_name}/messages/next",
             params={"timeout": long_polling_timeout},
             auth=(self.subscription_name, self.subscription_password),
         )
@@ -324,7 +323,7 @@ class ConsumerModule:
         status_json = {"status": "ok"}
         self.logger.debug(f"Acknowledging event {seq_num}")
         response = self.session.patch(
-            f"{self.config["provisioning_url"]}/v1/subscriptions/{self.subscription_name}/messages/{seq_num}/status",
+            f"{self.config['provisioning_url']}/v1/subscriptions/{self.subscription_name}/messages/{seq_num}/status",
             json=status_json,
             auth=(self.subscription_name, self.subscription_password),
         )
