@@ -1,6 +1,27 @@
 # SPDX-FileCopyrightText: 2026 Univention GmbH
 # SPDX-License-Identifier: AGPL-3.0-only
 
+try:
+    import ldap
+    use_ldap3 = False
+except ImportError:
+    import ldap3.utils.dn
+    use_ldap3 = True
+
+
+def _parse_dn_to_str2dn(parse_dn_result):
+     """Convert ldap3 parse_dn output to ldap.dn.str2dn format."""
+     rdns = []
+     current_rdn = []
+     for attr, val, sep in parse_dn_result:
+         current_rdn.append((attr, val, 1))
+         if sep != '+':
+             # End of current RDN (separator is ',' or '')
+             rdns.append(current_rdn)
+             current_rdn = []
+     return rdns
+
+
 class DN:  # TODO FIXME copied from univention-python (univention.DN)
     """
     A |LDAP| Distinguished Name.
@@ -14,12 +35,16 @@ class DN:  # TODO FIXME copied from univention-python (univention.DN)
 
     def __init__(self, dn: str) -> None:
         self.dn = dn
-        self._hash = None
-        self._str = None
-        try:
-            self._dn = ldap.dn.str2dn(self.dn)
-        except ldap.DECODING_ERROR:
-            raise ValueError('Malformed DN syntax: %r' % (self.dn,))
+        self._hash: int | None = None
+        self._str: str | None = None
+        if use_ldap3:
+            self._dn = _parse_dn_to_str2dn(ldap3.utils.dn.parse_dn(self.dn))
+        else:
+            assert ldap
+            try:
+                self._dn = ldap.dn.str2dn(self.dn)
+            except ldap.DECODING_ERROR:
+                raise ValueError('Malformed DN syntax: %r' % (self.dn,))
 
     @property
     def rdn(self) -> tuple[str, str]:
