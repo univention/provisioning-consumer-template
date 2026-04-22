@@ -64,7 +64,7 @@ class UDMEventHandler(EventHandler):
             else:
                 self._handle_create(metadata, new)
         except SystemExit as e:
-            raise e
+            raise
         except Exception as e:  # noqa:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             self._error_handler(metadata, old, new, exc_type, exc_value, exc_traceback)
@@ -182,13 +182,15 @@ class ConsumerModule:
         self.subscription_name, self.subscription_password = self._get_subscription_credentials()
 
     def check_config(self):
-        assert isinstance(self.config.get("name"), str) and self.config.get("name")
+        if not (isinstance(self.config.get("name"), str) and self.config.get("name")):
+            raise ValueError("'name' is not set in the config!")
         self.config["config_path"] = os.path.abspath(
             self.config.get("config_path", "/var/lib/univention/consumer")
         ).rstrip("/")
-        assert self.config["config_path"]
-        assert self.config.get("provisioning_url") is not None
-
+        if not self.config["config_path"]:
+            raise ValueError("'config_path' is not set in the config!")
+        if self.config.get("provisioning_url") is None:
+            raise ValueError("'provisioning_url' is not set in the config!")
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}({self.config})'
