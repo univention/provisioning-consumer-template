@@ -4,11 +4,14 @@ version = "0.1.0"
 description = "A Provisioning consumer"
 requires-python = ">=3.11"
 dependencies = [
+    "ldap3",
     "requests>=2.32.0",
-    "python-ldap>=3.4.0",
 ]
 
 [project.optional-dependencies]
+python-ldap = [
+    "python-ldap>=3.4.0",
+]
 test = [
     "pytest>=8.0",
     "pytest-mock>=3.14",
