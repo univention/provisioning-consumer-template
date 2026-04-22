@@ -11,7 +11,7 @@ COPY pyproject.toml .
 
 # Install dependencies into an isolated venv inside /app/.venv
 RUN uv venv .venv && \
-    uv pip install --python .venv/bin/python httpx
+    uv pip install --python .venv/bin/python requests ldap3
 
 # Copy source and install the package itself (no deps, already installed)
 COPY src/ src/
