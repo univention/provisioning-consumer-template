@@ -195,28 +195,28 @@ class TestConsumerModuleInit:
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
         consumer = ConsumerModule(**config)
         assert consumer.config["name"] == "test-consumer"
         assert consumer.config["provisioning_url"] == "https://example.com"
 
-    def test_init_normalizes_config_path(self, mock_logger, tmp_path):
+    def test_init_normalizes_config_dir(self, mock_logger, tmp_path):
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
-            "config_path": str(tmp_path) + "/",
+            "config_dir": str(tmp_path) + "/",
         }
         consumer = ConsumerModule(**config)
-        assert not consumer.config["config_path"].endswith("/")
+        assert not consumer.config["config_dir"].endswith("/")
 
     def test_repr(self, mock_logger, tmp_path):
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
         consumer = ConsumerModule(**config)
         repr_str = repr(consumer)
@@ -226,14 +226,14 @@ class TestConsumerModuleInit:
 
 class TestConsumerModuleCredentials:
     def test_get_subscription_credentials_reads_file(self, mock_logger, tmp_path, temp_config_file):
-        config_path = str(tmp_path)
+        config_dir = str(tmp_path)
         temp_config_file("myuser", "mypassword")
 
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
-            "config_path": config_path,
+            "config_dir": config_dir,
         }
         consumer = ConsumerModule(**config)
         name, password = consumer._get_subscription_credentials()
@@ -245,7 +245,7 @@ class TestConsumerModuleCredentials:
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
         consumer = ConsumerModule(**config)
         name, password = consumer._get_subscription_credentials()
@@ -253,8 +253,8 @@ class TestConsumerModuleCredentials:
         assert password is None
 
     def test_get_subscription_credentials_partial_config_missing_password(self, mock_logger, tmp_path):
-        config_path = str(tmp_path)
-        config_file = os.path.join(config_path, "config.json")
+        config_dir = str(tmp_path)
+        config_file = os.path.join(config_dir, "config.json")
         with open(config_file, "w") as f:
             json.dump({"subscription_name": "only_name"}, f)
 
@@ -262,7 +262,7 @@ class TestConsumerModuleCredentials:
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
-            "config_path": config_path,
+            "config_dir": config_dir,
         }
         consumer = ConsumerModule(**config)
         name, password = consumer._get_subscription_credentials()
@@ -270,8 +270,8 @@ class TestConsumerModuleCredentials:
         assert password is None
 
     def test_get_subscription_credentials_partial_config_missing_name(self, mock_logger, tmp_path):
-        config_path = str(tmp_path)
-        config_file = os.path.join(config_path, "config.json")
+        config_dir = str(tmp_path)
+        config_file = os.path.join(config_dir, "config.json")
         with open(config_file, "w") as f:
             json.dump({"subscription_password": "only_password"}, f)
 
@@ -279,7 +279,7 @@ class TestConsumerModuleCredentials:
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
-            "config_path": config_path,
+            "config_dir": config_dir,
         }
         consumer = ConsumerModule(**config)
         name, password = consumer._get_subscription_credentials()
@@ -291,7 +291,7 @@ class TestConsumerModuleCredentials:
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
         consumer = ConsumerModule(**config)
         consumer._save_subscription_credentials("testuser", "testpassword")
@@ -308,7 +308,7 @@ class TestConsumerModuleCredentials:
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
         consumer = ConsumerModule(**config)
         consumer._save_subscription_credentials("testuser", "testpassword")
@@ -324,7 +324,7 @@ class TestConsumerModuleSubscribe:
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
 
         consumer = ConsumerModule(handler, session=mock_session, **config)
@@ -342,7 +342,7 @@ class TestConsumerModuleSubscribe:
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
 
         consumer = ConsumerModule(handler, session=mock_session, **config)
@@ -358,7 +358,7 @@ class TestConsumerModuleSubscribe:
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
         temp_config_file("existing_user", "existing_password")
 
@@ -379,7 +379,7 @@ class TestConsumerModuleSubscribe:
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
 
         consumer = ConsumerModule(handler, session=mock_session, **config)
@@ -391,7 +391,7 @@ class TestConsumerModuleSubscribe:
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
 
         consumer = ConsumerModule(handler, session=mock_session, **config)
@@ -410,7 +410,7 @@ class TestConsumerModuleStep:
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
 
         event_with_seq = sample_event.copy()
@@ -429,7 +429,7 @@ class TestConsumerModuleStep:
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
 
-            consumer.step()
+            consumer.process_one_event()
 
         mock_session.get.assert_called()
         mock_session.patch.assert_called()
@@ -440,7 +440,7 @@ class TestConsumerModuleStep:
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
 
         mock_session.get.return_value.status_code = 200
@@ -453,7 +453,7 @@ class TestConsumerModuleStep:
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
 
-            consumer.step()
+            consumer.process_one_event()
 
         handler.handle_event.assert_not_called()
 
@@ -462,7 +462,7 @@ class TestConsumerModuleStep:
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
 
         mock_session.get.return_value.status_code = 200
@@ -479,7 +479,7 @@ class TestConsumerModuleStep:
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
 
-            consumer.step()
+            consumer.process_one_event()
 
         mock_session.patch.assert_not_called()
 
@@ -488,7 +488,7 @@ class TestConsumerModuleStep:
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
 
         mock_session.get.return_value.status_code = 200
@@ -499,7 +499,7 @@ class TestConsumerModuleStep:
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
 
-            consumer.step(long_polling_timeout=30)
+            consumer.process_one_event(long_polling_timeout=30)
 
         mock_session.get.assert_called_once()
         call_args = mock_session.get.call_args
@@ -512,7 +512,7 @@ class TestConsumerModuleFetchEvent:
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
 
         with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
@@ -528,7 +528,7 @@ class TestConsumerModuleFetchEvent:
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
 
         with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
@@ -544,7 +544,7 @@ class TestConsumerModuleFetchEvent:
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
 
         mock_session.get.return_value.status_code = 200
@@ -563,7 +563,7 @@ class TestConsumerModuleFetchEvent:
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
 
         mock_session.get.return_value.status_code = 401
@@ -582,7 +582,7 @@ class TestConsumerModuleFetchEvent:
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
 
         mock_session.get.return_value.status_code = 400
@@ -601,7 +601,7 @@ class TestConsumerModuleFetchEvent:
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
 
         mock_session.get.return_value.status_code = 403
@@ -620,7 +620,7 @@ class TestConsumerModuleFetchEvent:
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
 
         mock_session.get.return_value.status_code = 404
@@ -641,7 +641,7 @@ class TestConsumerModuleAcknowledgeEvent:
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
 
         mock_response = MagicMock()
@@ -666,7 +666,7 @@ class TestConsumerModuleAcknowledgeEvent:
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
 
         mock_response = MagicMock()
@@ -689,7 +689,7 @@ class TestConsumerModuleAcknowledgeEvent:
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
 
         mock_response = MagicMock()
@@ -712,7 +712,7 @@ class TestConsumerModuleLoop:
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
-            "config_path": str(tmp_path),
+            "config_dir": str(tmp_path),
         }
 
         call_count = 0
@@ -724,10 +724,10 @@ class TestConsumerModuleLoop:
                 raise SystemExit()
 
         consumer = ConsumerModule(handler, session=mock_session, **config)
-        consumer.step = step_side_effect
+        consumer.process_one_event = step_side_effect
 
         with pytest.raises(SystemExit):
-            consumer.loop()
+            consumer.consume_loop()
 
         assert call_count == 3
 
@@ -741,7 +741,7 @@ class TestConsumerModuleLoop:
             config = {
                 "name": "test-consumer",
                 "provisioning_url": "https://example.com",
-                "config_path": str(tmp_path),
+                "config_dir": str(tmp_path),
             }
 
             consumer = ConsumerModule(handler, session=mock_session, **config)
@@ -755,11 +755,11 @@ class TestConsumerModuleLoop:
                     raise SystemExit()
                 raise QueueAccessError("Queue access failed")
 
-            consumer.step = step_side_effect
+            consumer.process_one_event = step_side_effect
 
             with patch("provisioning_consumer_lib.consumer.time.sleep") as mock_sleep:
                 with pytest.raises(SystemExit):
-                    consumer.loop()
+                    consumer.consume_loop()
 
         assert mock_sleep.call_count >= 1
         mock_consumer_logger.critical.assert_called()

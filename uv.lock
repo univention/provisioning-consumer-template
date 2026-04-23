@@ -172,7 +172,7 @@ wheels = [
 
 [[package]]
 name = "provisioning-consumer"
-version = "0.1.0"
+version = "0.9.1"
 source = { editable = "." }
 dependencies = [
     { name = "loguru" },
@@ -196,7 +196,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "provisioning-consumer-lib"
-version = "0.1.0"
+version = "0.9.1"
 source = { directory = "lib" }
 dependencies = [
     { name = "ldap3" },

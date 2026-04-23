@@ -45,6 +45,7 @@ def sample_event():
     return {
         "uuid": "test-uuid-123",
         "timestamp": "2026-01-01T00:00:00Z",
+        "sequence_number": 1234,
         "body": {
             "old": {
                 "dn": "uid=testuser,cn=users,dc=example,dc=com",
@@ -152,11 +153,11 @@ def ConcreteEventHandler(mock_logger):
             if self._remove_handler_fn:
                 self._remove_handler_fn()
 
-        def _error_handler(self, metadata, old, new, exc_type, exc_value, exc_traceback):
+        def _handle_error(self, metadata, old, new, exc_type, exc_value, exc_traceback):
             self.error_called_with = (metadata, old, new, exc_type, exc_value, exc_traceback)
             if self._error_handler_fn:
                 self._error_handler_fn()
             else:
-                super()._error_handler(metadata, old, new, exc_type, exc_value, exc_traceback)
+                super()._handle_error(metadata, old, new, exc_type, exc_value, exc_traceback)
 
     return ConcreteEventHandler
