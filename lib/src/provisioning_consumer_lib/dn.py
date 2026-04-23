@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 
 from typing import Any, Self
+from typing_extensions import override
 
 try:
     import ldap
@@ -71,9 +72,9 @@ def _dn2str(dn) -> str:
 class DN:
     """A |LDAP| Distinguished Name."""
 
-    _CASE_INSENSITIVE_ATTRIBUTES = {'cn', 'uid', 'dc', 'ou', 'c', 'l', 'o'}
+    _CASE_INSENSITIVE_ATTRIBUTES = {"cn", "uid", "dc", "ou", "c", "l", "o"}
 
-    __slots__ = ('_dn', '_hash', '_str', 'dn')
+    __slots__ = ("_dn", "_hash", "_str", "dn")
 
     def __init__(self, dn: str) -> None:
         self.dn = dn
@@ -86,7 +87,7 @@ class DN:
             try:
                 self._dn = ldap.dn.str2dn(self.dn)
             except ldap.DECODING_ERROR:
-                raise ValueError('Malformed DN syntax: %r' % (self.dn,))
+                raise ValueError("Malformed DN syntax: %r" % (self.dn,))
 
     @property
     def rdn(self) -> tuple[str, str]:
@@ -168,6 +169,7 @@ class DN:
             return self.__class__(_dn2str(self._dn[key]))
         return self.__class__(_dn2str([self._dn[key]]))
 
+    @override
     def __eq__(self, other: object) -> bool:
         """
         >>> DN('foo=1') == DN('foo=1')
@@ -205,7 +207,7 @@ class DN:
         if self._hash is None:
             self._hash = hash(tuple(
                 tuple(sorted(
-                    (attr.lower(), val.lower() if attr.lower() in self._CASE_INSENSITIVE_ATTRIBUTES else val, ava)
+                    (attr.lower(), val.lower() if attr.lower() in self._CASE_INSENSITIVE_ATTRIBUTES else val, ava,)
                     for attr, val, ava in rdn
                 )) for rdn in self._dn
             ))

@@ -3,49 +3,76 @@
 
 import copy
 import json
-import logging
 import os
+import secrets
 import sys
 import time
 import types
-import secrets
-from typing import Any, Mapping, Iterable, Tuple, Union, TypeAlias
-from logging import getLogger
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any, TypedDict, TypeAlias
 from .dn import DN
 
+import loguru
 import requests
+from loguru._logger import Logger
+from typing_extensions import override
 
 AttributeMapping: TypeAlias = dict[str, Any]
-FILENAME_CONFIG = "config.json"
+FILENAME_CONFIG = "provisioning_config.json"
 DEFAULT_ERROR_TIMEOUT = 60  # sleep duration after failed provisioning queue access in seconds
 
 class QueueAccessError(Exception):
     """
     Raised if access to provisioning queue fails.
     """
+
     pass
+
+
+class Topics(TypedDict):
+    realm: str
+    topic: str
+
+
+class QueryEventObject(TypedDict):
+    publisher_name: str
+    ts: str
+    realm: str
+    topic: str
+    body: dict[str, Any]  # pyright: ignore[reportExplicitAny]
+    sequence_number: int
+    num_delivered: int
+
+
+class Metadata(TypedDict):
+    publisher_name: str
+    ts: str
+    realm: str
+    topic: str
+    sequence_number: int
+    num_delivered: int
 
 
 class SubscriptionError(Exception):
     """
     Raised when a subscription fails.
     """
+
     pass
 
 
-
 class EventHandler:
-    def __init__(self, logger: Union["loguru.logger", logging.Logger], *args, **kwargs) -> None:
-        self.logger = logger
+    def __init__(self, logger: Logger | None, *args, **kwargs) -> None:
+        self.logger: Logger = logger if logger is not None else loguru.logger
 
-    def is_relevant(self, event: dict[str, Any]) -> bool:
+    def is_relevant(self, event: QueryEventObject) -> bool:
         """
         Indicates if the event shall be processed by handle_event().
         Can be used to filter the events.
         """
         return True
 
-    def handle_event(self, event: dict[str, Any]) -> bool:
+    def handle_event(self, event: QueryEventObject) -> bool:
         """
         Calls the handler functions depending on the event type.
 
@@ -56,7 +83,8 @@ class EventHandler:
 
 
 class UDMEventHandler(EventHandler):
-    def handle_event(self, event: dict[str, Any]) -> bool:
+    @override
+    def handle_event(self, event: QueryEventObject) -> bool:
         """
         Calls the handler functions depending on the event type.
 
@@ -73,14 +101,16 @@ class UDMEventHandler(EventHandler):
                 self._handle_create(metadata, new)
         except SystemExit:
             raise
-        except Exception:  # noqa:
+        except Exception:  # noqa: E722
             exc_type, exc_value, exc_traceback = sys.exc_info()
             self._handle_error(metadata, old, new, exc_type, exc_value, exc_traceback)
             return False
         return True
 
     @classmethod
-    def _event_to_udm(cls, event: dict[str, Any]) -> Tuple[AttributeMapping, AttributeMapping, AttributeMapping, bool]:
+    def _event_to_udm(
+            cls, event: QueryEventObject
+    ) -> tuple[Metadata, AttributeMapping, AttributeMapping, bool]:
         """
         Converts the event to UDM data objects metadata, old and new.
         :param dict[str, Any] event: the event to be converted
@@ -98,7 +128,7 @@ class UDMEventHandler(EventHandler):
             has_moved = old_dn != new_dn
         return metadata, old, new, has_moved
 
-    def _handle_create(self, metadata: AttributeMapping, new: AttributeMapping) -> None:
+    def _handle_create(self, metadata: Metadata, new: AttributeMapping) -> None:
         """
         Called when a new object was created.
 
@@ -107,7 +137,9 @@ class UDMEventHandler(EventHandler):
         """
         raise NotImplementedError
 
-    def _handle_modify(self, metadata: AttributeMapping, old: AttributeMapping, new: AttributeMapping, has_moved: bool) -> None:
+    def _handle_modify(
+            self, metadata: Metadata, old: AttributeMapping, new: AttributeMapping, has_moved: bool
+    ) -> None:
         """
         Called when an existing object was modified or moved.
 
@@ -120,7 +152,7 @@ class UDMEventHandler(EventHandler):
         """
         raise NotImplementedError
 
-    def _handle_remove(self, metadata: AttributeMapping, old: AttributeMapping) -> None:
+    def _handle_remove(self, metadata: Metadata, old: AttributeMapping) -> None:
         """
         Called when an object was removed.
 
@@ -129,9 +161,15 @@ class UDMEventHandler(EventHandler):
         """
         raise NotImplementedError
 
-    def _handle_error(self, metadata: AttributeMapping, old: AttributeMapping, new: AttributeMapping,
-                      exc_type: type[BaseException] | None, exc_value: BaseException | None,
-                      exc_traceback: types.TracebackType | None) -> None:
+    def _handle_error(
+            self,
+            metadata: Metadata,
+            old: AttributeMapping,
+            new: AttributeMapping,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            exc_traceback: types.TracebackType | None
+    ) -> None:
         """
         Will be called for unhandled exceptions in create/modify/remove.
 
@@ -143,11 +181,13 @@ class UDMEventHandler(EventHandler):
         :param traceback exc_traceback: traceback object
         """
         assert exc_value is not None
-        self.logger.exception('metadata=%r\n    old=%r\n    new=%r', metadata, old, new)  # noqa: LOG004
+        self.logger.exception("metadata=%r\n    old=%r\n    new=%r", metadata, old, new)  # noqa: LOG004
         raise exc_value.with_traceback(exc_traceback)
 
     @classmethod
-    def diff(cls, event: dict[str, Any], keys: Iterable[str] | None = None) -> dict[str, tuple[Any, Any]]:
+    def diff(
+            cls, event: QueryEventObject, keys: Iterable[str] | None = None
+    ) -> dict[str, tuple[Any, Any]]:
         """
         Find differences in old and new. Returns dict with keys pointing to old
         and new values.
@@ -158,7 +198,7 @@ class UDMEventHandler(EventHandler):
         :return: key -> (old[key], new[key]) mapping
         :rtype: dict
         """
-        metadata, old, new, _ = cls._event_to_udm(event)
+        _, old, new, _ = cls._event_to_udm(event)
         res = {}
         if keys:
             keyset = set(keys)
@@ -174,7 +214,7 @@ class ConsumerModule:
     def __init__(
             self,
             handler: EventHandler, session: requests.Session | None = None,
-            logger: Union["loguru.logger", logging.Logger] | None = None,
+            logger: Logger | None = None,
             *args,
             **kwargs
     ):
@@ -185,14 +225,17 @@ class ConsumerModule:
         :param kwargs:
            str config_dir: path to configuration directory
            str name: name of the consumer (has to be unique)
-           str provisioning_url: url of provisioning service (e.g. "https://FQDN-OF-PRIMARY/univention/provisioning/")
+           str provisioning_url: url of provisioning service
+               (e.g. "https://FQDN-OF-PRIMARY/univention/provisioning/")
         """
-        self.handler = handler
+        self.handler: EventHandler = handler
         self.config = kwargs
         self.validate_config()
-        self.logger = logger if logger is not None else getLogger(self.config["name"])
+        self.logger: Logger = logger if logger is not None else loguru.logger
         self.logger.info(f"Starting consumer {self.config['name']}")
-        self.session = session if session is not None else requests.Session()
+        self.session: requests.Session = session if session is not None else requests.Session()
+        self.subscription_name: str | None
+        self.subscription_password: str | None
         self.subscription_name, self.subscription_password = self._get_subscription_credentials()
 
     def validate_config(self):
@@ -211,9 +254,9 @@ class ConsumerModule:
             raise ValueError("'error_timeout' is not a valid integer >= 0!")
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({self.config})'
+        return f"{self.__class__.__name__}({self.config})"
 
-    def _get_subscription_credentials(self) -> Tuple[str | None, str | None]:
+    def _get_subscription_credentials(self) -> tuple[str | None, str | None]:
         """
         Get subscription credentials from configuration file.
         :returns: (name, password)
@@ -228,7 +271,10 @@ class ConsumerModule:
                     self.logger.debug(f"Read configuration file {fn}")
                     return data["subscription_name"], data["subscription_password"]
                 self.logger.warning(
-                    f"Read configuration file {fn} but no subscription_name or subscription_password was found"
+                    (
+                        f"Read configuration file {fn} but no "
+                        "subscription_name or subscription_password was found"
+                    )
                 )
         else:
             self.logger.info(f"No configuration file {fn} found")
@@ -242,22 +288,27 @@ class ConsumerModule:
             "subscription_name": name,
             "subscription_password": password,
         }
-        fn = os.path.join(self.config['config_dir'], FILENAME_CONFIG)
+        fn = os.path.join(self.config["config_dir"], FILENAME_CONFIG)
         fn_new = f"{fn}.new"
         fd = os.open(fn_new, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, 'w') as f:
+        with os.fdopen(fd, "w") as f:
             json.dump(data, f, indent=2)
         os.rename(fn_new, fn)
 
-    def subscribe(self, admin_username: str, admin_password: str, topics: list[dict[str, str]], prefill=True) -> None:
+    def subscribe(self, admin_username: str, admin_password: str, topics: list[Topics], prefill: bool = True) -> None:
         """
         Creates a new subscription for the configured realm and topics at the provisioning service.
-        It requires a special secret that is only accessible by domain administrators of the Nubus domain.
+        It requires a special secret that is only accessible
+        by domain administrators of the Nubus domain.
 
         :param str admin_username: administrator's username of provisioning service
         :param str admin_password: administrator's password of provisioning service
         :param list[dict[str, str]] topics: list of realms and topics to subscribe to
-            e.g. topics = [{"realm": "udm", "topic": "users/user"}, {"realm": "udm", "topic": "groups/group"}]
+            e.g.:
+            topics = [
+                {"realm": "udm", "topic": "users/user"},
+                {"realm": "udm", "topic": "groups/group"}
+            ]
         :param bool prefill: whether to prefill the subscription queue after initial registration
         :raises: SubscriptionError in case of failure
         """
@@ -278,20 +329,23 @@ class ConsumerModule:
             auth=(admin_username, admin_password),
         )
         if resp.status_code >= 300:
+            self.logger.error(
+                f"Subscription request failed with error code {resp.status_code}: {resp.text}"
+            )
             raise SubscriptionError(resp.text)
 
         self._save_subscription_credentials(self.subscription_name, self.subscription_password)
-
 
     def consume_loop(self):
         """
         An infinite loop in which events from the provisioning queue are processed.
         """
+        self.logger.debug("Starting consumer loop...")
         while True:
             try:
                 self.process_one_event()
             except QueueAccessError as e:
-                self.logger.critical("Unable to access provisioning queue: %s", e)
+                self.logger.critical(f"Unable to access provisioning queue: {e}")
                 self.logger.error(f"Sleeping {self.config['error_timeout']}s before continuing")
                 time.sleep(self.config['error_timeout'])
 
@@ -300,9 +354,11 @@ class ConsumerModule:
         Fetch next event from provisioning queue. If there is no waiting event in the subscribed queue,
         the request does long polling. It either times out after the given number of seconds or
         directly returns if the next events is pushed to the queue.
-        :param int long_polling_timeout: number of seconds to wait for new events in case the queue is empty
+        :param int long_polling_timeout: number of seconds
+            to wait for new events in case the queue is empty
         :return: None
-        :raise: QueueAccessError is raised, in case the access to the queue is denied or credentials are missing.
+        :raise: QueueAccessError is raised, in case the
+                access to the queue is denied or credentials are missing.
         """
         event = self._fetch_event(long_polling_timeout)
         if event:
@@ -314,11 +370,12 @@ class ConsumerModule:
                 self.logger.debug(f"Event {event['sequence_number']} has not been processed successfully.")
                 self._acknowledge_event(event)
         else:
-            # If the queue is empty, it uses long polling with a default timeout of <long_polling_timeout> seconds,
+            # If the queue is empty, it uses long polling
+            # with a default timeout of <long_polling_timeout> seconds,
             # for immediate notification of new changes.
             self.logger.debug("Long polling timeout, no more events.")
 
-    def _fetch_event(self, long_polling_timeout: int) -> dict[str, Any] | None:
+    def _fetch_event(self, long_polling_timeout: int) -> QueryEventObject | None:
         """
         Fetch next item from queue.
         :return: event dictionary
@@ -336,7 +393,7 @@ class ConsumerModule:
             raise QueueAccessError(resp.text)
         return resp.json()
 
-    def _acknowledge_event(self, event: dict[str, Any]) -> None:
+    def _acknowledge_event(self, event: QueryEventObject) -> None:
         """
         Acknowledge specified event at provisioning service.
         :param event: the event to be acknowledged
@@ -348,10 +405,12 @@ class ConsumerModule:
         status_json = {"status": "ok"}
         self.logger.debug(f"Acknowledging event {seq_num}")
         response = self.session.patch(
-            f"{self.config['provisioning_url']}/v1/subscriptions/{self.subscription_name}/messages/{seq_num}/status",
+            (
+                f"{self.config['provisioning_url']}/v1/"
+                f"subscriptions/{self.subscription_name}/messages/{seq_num}/status"
+            ),
             json=status_json,
             auth=(self.subscription_name, self.subscription_password),
         )
         if response.status_code != 200:
             self.logger.error(f"Acknowledging event {seq_num} failed: {response.text}")
-

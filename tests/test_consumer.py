@@ -254,7 +254,7 @@ class TestConsumerModuleCredentials:
 
     def test_get_subscription_credentials_partial_config_missing_password(self, mock_logger, tmp_path):
         config_dir = str(tmp_path)
-        config_file = os.path.join(config_dir, "config.json")
+        config_file = os.path.join(config_dir, "provisioning_config.json")
         with open(config_file, "w") as f:
             json.dump({"subscription_name": "only_name"}, f)
 
@@ -271,7 +271,7 @@ class TestConsumerModuleCredentials:
 
     def test_get_subscription_credentials_partial_config_missing_name(self, mock_logger, tmp_path):
         config_dir = str(tmp_path)
-        config_file = os.path.join(config_dir, "config.json")
+        config_file = os.path.join(config_dir, "provisioning_config.json")
         with open(config_file, "w") as f:
             json.dump({"subscription_password": "only_password"}, f)
 
@@ -296,7 +296,7 @@ class TestConsumerModuleCredentials:
         consumer = ConsumerModule(**config)
         consumer._save_subscription_credentials("testuser", "testpassword")
 
-        config_file = os.path.join(str(tmp_path), "config.json")
+        config_file = os.path.join(str(tmp_path), "provisioning_config.json")
         assert os.path.exists(config_file)
         with open(config_file) as f:
             data = json.load(f)
@@ -313,7 +313,7 @@ class TestConsumerModuleCredentials:
         consumer = ConsumerModule(**config)
         consumer._save_subscription_credentials("testuser", "testpassword")
 
-        config_file = os.path.join(str(tmp_path), "config.json")
+        config_file = os.path.join(str(tmp_path), "provisioning_config.json")
         mode = os.stat(config_file).st_mode & 0o777
         assert mode == 0o600
 
@@ -350,7 +350,7 @@ class TestConsumerModuleSubscribe:
         consumer.subscription_password = "test-pass"
         consumer.subscribe("admin", "adminpass", [{"realm": "udm", "topic": "users/user"}])
 
-        config_file = os.path.join(str(tmp_path), "config.json")
+        config_file = os.path.join(str(tmp_path), "provisioning_config.json")
         assert os.path.exists(config_file)
 
     def test_subscribe_reuses_existing_credentials(self, mock_logger, tmp_path, mock_session, temp_config_file):
@@ -733,33 +733,30 @@ class TestConsumerModuleLoop:
 
     def test_loop_sleeps_on_queue_access_error(self, tmp_path, mock_session):
         handler = MagicMock()
+        mock_consumer_logger = MagicMock()
 
-        with patch("provisioning_consumer_lib.consumer.getLogger") as mock_get_logger:
-            mock_consumer_logger = MagicMock()
-            mock_get_logger.return_value = mock_consumer_logger
+        config = {
+            "name": "test-consumer",
+            "provisioning_url": "https://example.com",
+            "config_dir": str(tmp_path),
+        }
 
-            config = {
-                "name": "test-consumer",
-                "provisioning_url": "https://example.com",
-                "config_dir": str(tmp_path),
-            }
+        consumer = ConsumerModule(handler, session=mock_session, logger=mock_consumer_logger, **config)
 
-            consumer = ConsumerModule(handler, session=mock_session, **config)
+        call_count = 0
 
-            call_count = 0
+        def step_side_effect():
+            nonlocal call_count
+            call_count += 1
+            if call_count >= 2:
+                raise SystemExit()
+            raise QueueAccessError("Queue access failed")
 
-            def step_side_effect():
-                nonlocal call_count
-                call_count += 1
-                if call_count >= 2:
-                    raise SystemExit()
-                raise QueueAccessError("Queue access failed")
+        consumer.process_one_event = step_side_effect
 
-            consumer.process_one_event = step_side_effect
-
-            with patch("provisioning_consumer_lib.consumer.time.sleep") as mock_sleep:
-                with pytest.raises(SystemExit):
-                    consumer.consume_loop()
+        with patch("provisioning_consumer_lib.consumer.time.sleep") as mock_sleep:
+            with pytest.raises(SystemExit):
+                consumer.consume_loop()
 
         assert mock_sleep.call_count >= 1
         mock_consumer_logger.critical.assert_called()

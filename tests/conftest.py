@@ -31,7 +31,7 @@ def config_dict():
 @pytest.fixture
 def temp_config_file(tmp_path):
     def _create(name="subscription_name", password="subscription_password"):
-        config_file = tmp_path / "config.json"
+        config_file = tmp_path / "provisioning_config.json"
         config_file.write_text(json.dumps({
             "subscription_name": name,
             "subscription_password": password,

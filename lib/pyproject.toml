@@ -6,6 +6,8 @@ requires-python = ">=3.11"
 dependencies = [
     "ldap3",
     "requests>=2.32.0",
+    "loguru",
+    "typing-extensions",
 ]
 
 [project.optional-dependencies]
