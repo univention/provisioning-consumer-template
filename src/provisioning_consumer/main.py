@@ -17,9 +17,13 @@ class MyEventHandler(UDMEventHandler):
 
 
 def main() -> None:
+    provisioning_admin = "provisioning_admin"
+    provisioning_password = "a-secret-string"
+    provisioning_topics = [{"realm": "udm", "topic": "users/user"}, {"realm": "udm", "topic": "groups/group"}]
     provisioning_url = "https://fqdn-of-primary-directory-node/univention/provisioning/"
     event_handler = MyEventHandler(logger)
-    consumer = ConsumerModule(handler=event_handler, name="TestConsumer", provisioning_url=provisioning_url)
+    consumer = ConsumerModule(handler=event_handler, name="TestConsumer", provisioning_url=provisioning_url, config_dir=".")
+    consumer.subscribe(provisioning_admin, provisioning_password, provisioning_topics, prefill=True)
     consumer.consume_loop()
 
 
