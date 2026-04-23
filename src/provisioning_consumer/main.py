@@ -20,7 +20,7 @@ def main() -> None:
     provisioning_url = "https://fqdn-of-primary-directory-node/univention/provisioning/"
     event_handler = MyEventHandler(logger)
     consumer = ConsumerModule(handler=event_handler, name="TestConsumer", provisioning_url=provisioning_url)
-    consumer.loop()
+    consumer.consume_loop()
 
 
 if __name__ == "__main__":

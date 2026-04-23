@@ -16,8 +16,8 @@ from .dn import DN
 import requests
 
 AttributeMapping: TypeAlias = dict[str, Any]
-FN_CONFIG = "config.json"
-ERROR_TIMEOUT = 60  # sleep duration after failed provisioning queue access in seconds
+FILENAME_CONFIG = "config.json"
+DEFAULT_ERROR_TIMEOUT = 60  # sleep duration after failed provisioning queue access in seconds
 
 class QueueAccessError(Exception):
     """
@@ -75,7 +75,7 @@ class UDMEventHandler(EventHandler):
             raise
         except Exception:  # noqa:
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            self._error_handler(metadata, old, new, exc_type, exc_value, exc_traceback)
+            self._handle_error(metadata, old, new, exc_type, exc_value, exc_traceback)
             return False
         return True
 
@@ -122,14 +122,14 @@ class UDMEventHandler(EventHandler):
 
     def _handle_remove(self, metadata: AttributeMapping, old: AttributeMapping) -> None:
         """
-        Called when an object was deleted.
+        Called when an object was removed.
 
-        :param str metadata: metadata of the delete event
+        :param str metadata: metadata of the remove event
         :param dict old: previous UDM objects attributes
         """
         raise NotImplementedError
 
-    def _error_handler(self, metadata: AttributeMapping, old: AttributeMapping, new: AttributeMapping,
+    def _handle_error(self, metadata: AttributeMapping, old: AttributeMapping, new: AttributeMapping,
                       exc_type: type[BaseException] | None, exc_value: BaseException | None,
                       exc_traceback: types.TracebackType | None) -> None:
         """
@@ -183,28 +183,32 @@ class ConsumerModule:
         :param EventHandler handler:
         :param requests.Session session: optional session for HTTP requests (for testing)
         :param kwargs:
-           str config_path: path to configuration file
+           str config_dir: path to configuration directory
            str name: name of the consumer (has to be unique)
            str provisioning_url: url of provisioning service (e.g. "https://FQDN-OF-PRIMARY/univention/provisioning/")
         """
         self.handler = handler
         self.config = kwargs
-        self.check_config()
+        self.validate_config()
         self.logger = logger if logger is not None else getLogger(self.config["name"])
         self.logger.info(f"Starting consumer {self.config['name']}")
         self.session = session if session is not None else requests.Session()
         self.subscription_name, self.subscription_password = self._get_subscription_credentials()
 
-    def check_config(self):
+    def validate_config(self):
         if not (isinstance(self.config.get("name"), str) and self.config.get("name")):
             raise ValueError("'name' is not set in the config!")
-        self.config["config_path"] = os.path.abspath(
-            self.config.get("config_path", "/var/lib/univention/consumer")
+        self.config["config_dir"] = os.path.abspath(
+            self.config.get("config_dir", "/var/lib/univention/consumer")
         ).rstrip("/")
-        if not self.config["config_path"]:
-            raise ValueError("'config_path' is not set in the config!")
+        if not self.config["config_dir"]:
+            raise ValueError("'config_dir' is not set in the config!")
         if self.config.get("provisioning_url") is None:
             raise ValueError("'provisioning_url' is not set in the config!")
+        if self.config.get("error_timeout") is None:
+            self.config["error_timeout"] = DEFAULT_ERROR_TIMEOUT
+        if not isinstance(self.config["error_timeout"], int) or self.config["error_timeout"] < 0:
+            raise ValueError("'error_timeout' is not a valid integer >= 0!")
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}({self.config})'
@@ -216,7 +220,7 @@ class ConsumerModule:
             name and password are None if configuration file could
             not be found or values are unset.
         """
-        fn = os.path.join(self.config["config_path"], FN_CONFIG)
+        fn = os.path.join(self.config["config_dir"], FILENAME_CONFIG)
         if os.path.isfile(fn):
             with open(fn) as fd:
                 data = json.load(fd)
@@ -238,7 +242,7 @@ class ConsumerModule:
             "subscription_name": name,
             "subscription_password": password,
         }
-        fn = os.path.join(self.config['config_path'], FN_CONFIG)
+        fn = os.path.join(self.config['config_dir'], FILENAME_CONFIG)
         fn_new = f"{fn}.new"
         fd = os.open(fn_new, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, 'w') as f:
@@ -279,19 +283,19 @@ class ConsumerModule:
         self._save_subscription_credentials(self.subscription_name, self.subscription_password)
 
 
-    def loop(self):
+    def consume_loop(self):
         """
-        Endless loop
+        An infinite loop in which events from the provisioning queue are processed.
         """
         while True:
             try:
-                self.step()
+                self.process_one_event()
             except QueueAccessError as e:
                 self.logger.critical("Unable to access provisioning queue: %s", e)
-                self.logger.error(f"Sleeping {ERROR_TIMEOUT}s before continuing")
-                time.sleep(ERROR_TIMEOUT)
+                self.logger.error(f"Sleeping {self.config['error_timeout']}s before continuing")
+                time.sleep(self.config['error_timeout'])
 
-    def step(self, long_polling_timeout: int = 10):
+    def process_one_event(self, long_polling_timeout: int = 10):
         """
         Fetch next event from provisioning queue. If there is no waiting event in the subscribed queue,
         the request does long polling. It either times out after the given number of seconds or
