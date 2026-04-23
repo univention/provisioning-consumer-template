@@ -19,7 +19,10 @@ from typing_extensions import override
 
 AttributeMapping: TypeAlias = dict[str, Any]
 FILENAME_CONFIG = "provisioning_config.json"
-DEFAULT_ERROR_TIMEOUT = 60  # sleep duration after failed provisioning queue access in seconds
+DEFAULT_ERROR_TIMEOUT = (
+    60  # sleep duration after failed provisioning queue access in seconds
+)
+
 
 class QueueAccessError(Exception):
     """
@@ -109,7 +112,7 @@ class UDMEventHandler(EventHandler):
 
     @classmethod
     def _event_to_udm(
-            cls, event: QueryEventObject
+        cls, event: QueryEventObject
     ) -> tuple[Metadata, AttributeMapping, AttributeMapping, bool]:
         """
         Converts the event to UDM data objects metadata, old and new.
@@ -138,7 +141,11 @@ class UDMEventHandler(EventHandler):
         raise NotImplementedError
 
     def _handle_modify(
-            self, metadata: Metadata, old: AttributeMapping, new: AttributeMapping, has_moved: bool
+        self,
+        metadata: Metadata,
+        old: AttributeMapping,
+        new: AttributeMapping,
+        has_moved: bool,
     ) -> None:
         """
         Called when an existing object was modified or moved.
@@ -162,13 +169,13 @@ class UDMEventHandler(EventHandler):
         raise NotImplementedError
 
     def _handle_error(
-            self,
-            metadata: Metadata,
-            old: AttributeMapping,
-            new: AttributeMapping,
-            exc_type: type[BaseException] | None,
-            exc_value: BaseException | None,
-            exc_traceback: types.TracebackType | None
+        self,
+        metadata: Metadata,
+        old: AttributeMapping,
+        new: AttributeMapping,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        exc_traceback: types.TracebackType | None,
     ) -> None:
         """
         Will be called for unhandled exceptions in create/modify/remove.
@@ -186,7 +193,7 @@ class UDMEventHandler(EventHandler):
 
     @classmethod
     def diff(
-            cls, event: QueryEventObject, keys: Iterable[str] | None = None
+        cls, event: QueryEventObject, keys: Iterable[str] | None = None
     ) -> dict[str, tuple[Any, Any]]:
         """
         Find differences in old and new. Returns dict with keys pointing to old
@@ -212,11 +219,12 @@ class UDMEventHandler(EventHandler):
 
 class ConsumerModule:
     def __init__(
-            self,
-            handler: EventHandler, session: requests.Session | None = None,
-            logger: Logger | None = None,
-            *args,
-            **kwargs
+        self,
+        handler: EventHandler,
+        session: requests.Session | None = None,
+        logger: Logger | None = None,
+        *args,
+        **kwargs,
     ):
         """
         ConsumerModule
@@ -233,10 +241,14 @@ class ConsumerModule:
         self.validate_config()
         self.logger: Logger = logger if logger is not None else loguru.logger
         self.logger.info(f"Starting consumer {self.config['name']}")
-        self.session: requests.Session = session if session is not None else requests.Session()
+        self.session: requests.Session = (
+            session if session is not None else requests.Session()
+        )
         self.subscription_name: str | None
         self.subscription_password: str | None
-        self.subscription_name, self.subscription_password = self._get_subscription_credentials()
+        self.subscription_name, self.subscription_password = (
+            self._get_subscription_credentials()
+        )
 
     def validate_config(self):
         if not (isinstance(self.config.get("name"), str) and self.config.get("name")):
@@ -250,7 +262,10 @@ class ConsumerModule:
             raise ValueError("'provisioning_url' is not set in the config!")
         if self.config.get("error_timeout") is None:
             self.config["error_timeout"] = DEFAULT_ERROR_TIMEOUT
-        if not isinstance(self.config["error_timeout"], int) or self.config["error_timeout"] < 0:
+        if (
+            not isinstance(self.config["error_timeout"], int)
+            or self.config["error_timeout"] < 0
+        ):
             raise ValueError("'error_timeout' is not a valid integer >= 0!")
 
     def __repr__(self) -> str:
@@ -295,7 +310,13 @@ class ConsumerModule:
             json.dump(data, f, indent=2)
         os.rename(fn_new, fn)
 
-    def subscribe(self, admin_username: str, admin_password: str, topics: list[Topics], prefill: bool = True) -> None:
+    def subscribe(
+        self,
+        admin_username: str,
+        admin_password: str,
+        topics: list[Topics],
+        prefill: bool = True,
+    ) -> None:
         """
         Creates a new subscription for the configured realm and topics at the provisioning service.
         It requires a special secret that is only accessible
@@ -312,7 +333,9 @@ class ConsumerModule:
         :param bool prefill: whether to prefill the subscription queue after initial registration
         :raises: SubscriptionError in case of failure
         """
-        self.subscription_name, self.subscription_password = self._get_subscription_credentials()
+        self.subscription_name, self.subscription_password = (
+            self._get_subscription_credentials()
+        )
         if not self.subscription_name or not self.subscription_password:
             self.subscription_name = f"{self.config['name']}-{secrets.token_hex(16)}"
             self.subscription_password = secrets.token_urlsafe(32)
@@ -334,7 +357,9 @@ class ConsumerModule:
             )
             raise SubscriptionError(resp.text)
 
-        self._save_subscription_credentials(self.subscription_name, self.subscription_password)
+        self._save_subscription_credentials(
+            self.subscription_name, self.subscription_password
+        )
 
     def consume_loop(self):
         """
@@ -346,8 +371,10 @@ class ConsumerModule:
                 self.process_one_event()
             except QueueAccessError as e:
                 self.logger.critical(f"Unable to access provisioning queue: {e}")
-                self.logger.error(f"Sleeping {self.config['error_timeout']}s before continuing")
-                time.sleep(self.config['error_timeout'])
+                self.logger.error(
+                    f"Sleeping {self.config['error_timeout']}s before continuing"
+                )
+                time.sleep(self.config["error_timeout"])
 
     def process_one_event(self, long_polling_timeout: int = 10):
         """
@@ -364,10 +391,14 @@ class ConsumerModule:
         if event:
             self.logger.debug(f"Event {event['sequence_number']} has been fetched.")
             if not self.handler.is_relevant(event):
-                self.logger.debug(f"Skipped and acknowledged event {event['sequence_number']} as requested.")
+                self.logger.debug(
+                    f"Skipped and acknowledged event {event['sequence_number']} as requested."
+                )
                 self._acknowledge_event(event)
             elif self.handler.handle_event(event):
-                self.logger.debug(f"Event {event['sequence_number']} has not been processed successfully.")
+                self.logger.debug(
+                    f"Event {event['sequence_number']} has not been processed successfully."
+                )
                 self._acknowledge_event(event)
         else:
             # If the queue is empty, it uses long polling

@@ -32,11 +32,16 @@ def config_dict():
 def temp_config_file(tmp_path):
     def _create(name="subscription_name", password="subscription_password"):
         config_file = tmp_path / "provisioning_config.json"
-        config_file.write_text(json.dumps({
-            "subscription_name": name,
-            "subscription_password": password,
-        }))
+        config_file.write_text(
+            json.dumps(
+                {
+                    "subscription_name": name,
+                    "subscription_password": password,
+                }
+            )
+        )
         return str(config_file)
+
     return _create
 
 
@@ -127,7 +132,14 @@ def ConcreteEventHandler(mock_logger):
     from provisioning_consumer_lib.consumer import UDMEventHandler
 
     class ConcreteEventHandler(UDMEventHandler):
-        def __init__(self, logger, create_handler=None, modify_handler=None, remove_handler=None, error_handler_fn=None):
+        def __init__(
+            self,
+            logger,
+            create_handler=None,
+            modify_handler=None,
+            remove_handler=None,
+            error_handler_fn=None,
+        ):
             super().__init__(logger)
             self.create_called_with = None
             self.modify_called_with = None
@@ -154,10 +166,19 @@ def ConcreteEventHandler(mock_logger):
                 self._remove_handler_fn()
 
         def _handle_error(self, metadata, old, new, exc_type, exc_value, exc_traceback):
-            self.error_called_with = (metadata, old, new, exc_type, exc_value, exc_traceback)
+            self.error_called_with = (
+                metadata,
+                old,
+                new,
+                exc_type,
+                exc_value,
+                exc_traceback,
+            )
             if self._error_handler_fn:
                 self._error_handler_fn()
             else:
-                super()._handle_error(metadata, old, new, exc_type, exc_value, exc_traceback)
+                super()._handle_error(
+                    metadata, old, new, exc_type, exc_value, exc_traceback
+                )
 
     return ConcreteEventHandler

@@ -17,10 +17,13 @@ from typing_extensions import override
 
 try:
     import ldap
+
     use_ldap3 = False
 except ImportError:
     import ldap3.utils.dn
+
     use_ldap3 = True
+
 
 def _unescape_dn_value(val: str) -> str:
     """Normalize escaped characters in DN attribute values.
@@ -36,22 +39,24 @@ def _unescape_dn_value(val: str) -> str:
     'hello'
     """
     # First resolve hex-escapes: \XX -> chr(0xXX)
-    val = re.sub(r'\\([0-9a-fA-F]{2})', lambda m: chr(int(m.group(1), 16)), val)
+    val = re.sub(r"\\([0-9a-fA-F]{2})", lambda m: chr(int(m.group(1), 16)), val)
     # Then resolve backslash-escapes: \c -> c  (e.g. \, -> ,)
-    val = re.sub(r'\\(.)', r'\1', val)
+    val = re.sub(r"\\(.)", r"\1", val)
     return val
 
+
 def _parse_dn_to_str2dn(parse_dn_result: str):
-     """Convert ldap3 parse_dn output to ldap.dn.str2dn format."""
-     rdns = []
-     current_rdn = []
-     for attr, val, sep in parse_dn_result:
-         current_rdn.append((attr, _unescape_dn_value(val), 1))
-         if sep != '+':
-             # End of current RDN (separator is ',' or '')
-             rdns.append(current_rdn)
-             current_rdn = []
-     return rdns
+    """Convert ldap3 parse_dn output to ldap.dn.str2dn format."""
+    rdns = []
+    current_rdn = []
+    for attr, val, sep in parse_dn_result:
+        current_rdn.append((attr, _unescape_dn_value(val), 1))
+        if sep != "+":
+            # End of current RDN (separator is ',' or '')
+            rdns.append(current_rdn)
+            current_rdn = []
+    return rdns
+
 
 def _dn2str(dn) -> str:
     """
@@ -63,10 +68,10 @@ def _dn2str(dn) -> str:
     rdns = []
     for rdn in dn:
         # Mehrere AVAs innerhalb eines RDN werden mit '+' verbunden
-        avas = '+'.join(f'{attr}={value}' for attr, value, _ in rdn)
+        avas = "+".join(f"{attr}={value}" for attr, value, _ in rdn)
         rdns.append(avas)
         # RDNs werden mit ',' verbunden
-    return ','.join(rdns)
+    return ",".join(rdns)
 
 
 class DN:
@@ -115,7 +120,7 @@ class DN:
         """
         if not isinstance(other, DN):
             other = self.__class__(other)
-        return self[-len(other):] == other
+        return self[-len(other) :] == other
 
     def startswith(self, other: str | Self):
         """
@@ -126,7 +131,7 @@ class DN:
         """
         if not isinstance(other, DN):
             other = self.__class__(other)
-        return self[:len(other)] == other
+        return self[: len(other)] == other
 
     def walk(self, base):
         """
@@ -135,7 +140,7 @@ class DN:
         """
         base = self.__class__(base) if not isinstance(base, DN) else base
         if not self.endswith(base):
-            raise ValueError('DN must end with given base')
+            raise ValueError("DN must end with given base")
 
         for i in reversed(range(len(self) - len(base) + 1)):
             yield self[i:]
@@ -158,7 +163,7 @@ class DN:
         >>> repr(DN('foo=1,bar=2')) == "<DN 'foo=1,bar=2'>"
         True
         """
-        return '<%s %r>' % (type(self).__name__, str(self))
+        return "<%s %r>" % (type(self).__name__, str(self))
 
     def __len__(self) -> int:
         """Return length of DN components"""
@@ -205,12 +210,23 @@ class DN:
     def __hash__(self) -> int:
         # compute hash only once - object is static
         if self._hash is None:
-            self._hash = hash(tuple(
-                tuple(sorted(
-                    (attr.lower(), val.lower() if attr.lower() in self._CASE_INSENSITIVE_ATTRIBUTES else val, ava,)
-                    for attr, val, ava in rdn
-                )) for rdn in self._dn
-            ))
+            self._hash = hash(
+                tuple(
+                    tuple(
+                        sorted(
+                            (
+                                attr.lower(),
+                                val.lower()
+                                if attr.lower() in self._CASE_INSENSITIVE_ATTRIBUTES
+                                else val,
+                                ava,
+                            )
+                            for attr, val, ava in rdn
+                        )
+                    )
+                    for rdn in self._dn
+                )
+            )
         return self._hash
 
     @classmethod
@@ -240,6 +256,7 @@ class DN:
         return set(map(str, dns))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import doctest
+
     doctest.testmod()

@@ -1,4 +1,11 @@
-from .consumer import ConsumerModule, EventHandler, UDMEventHandler, QueueAccessError, SubscriptionError, AttributeMapping
+from .consumer import (
+    ConsumerModule,
+    EventHandler,
+    UDMEventHandler,
+    QueueAccessError,
+    SubscriptionError,
+    AttributeMapping,
+)
 from .dn import DN
 
 __all__ = [

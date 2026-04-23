@@ -35,7 +35,9 @@ class TestSubscriptionError:
 
 
 class TestUDMEventHandler:
-    def test_handle_event_routes_to_create(self, ConcreteEventHandler, mock_logger, sample_create_event):
+    def test_handle_event_routes_to_create(
+        self, ConcreteEventHandler, mock_logger, sample_create_event
+    ):
         handler = ConcreteEventHandler(mock_logger)
         result = handler.handle_event(sample_create_event)
         assert result is True
@@ -43,7 +45,9 @@ class TestUDMEventHandler:
         assert handler.modify_called_with is None
         assert handler.remove_called_with is None
 
-    def test_handle_event_routes_to_modify(self, ConcreteEventHandler, mock_logger, sample_event):
+    def test_handle_event_routes_to_modify(
+        self, ConcreteEventHandler, mock_logger, sample_event
+    ):
         handler = ConcreteEventHandler(mock_logger)
         result = handler.handle_event(sample_event)
         assert result is True
@@ -51,7 +55,9 @@ class TestUDMEventHandler:
         assert handler.modify_called_with is not None
         assert handler.remove_called_with is None
 
-    def test_handle_event_routes_to_remove(self, ConcreteEventHandler, mock_logger, sample_remove_event):
+    def test_handle_event_routes_to_remove(
+        self, ConcreteEventHandler, mock_logger, sample_remove_event
+    ):
         handler = ConcreteEventHandler(mock_logger)
         result = handler.handle_event(sample_remove_event)
         assert result is True
@@ -59,12 +65,16 @@ class TestUDMEventHandler:
         assert handler.modify_called_with is None
         assert handler.remove_called_with is not None
 
-    def test_handle_event_returns_true_on_success(self, ConcreteEventHandler, mock_logger, sample_event):
+    def test_handle_event_returns_true_on_success(
+        self, ConcreteEventHandler, mock_logger, sample_event
+    ):
         handler = ConcreteEventHandler(mock_logger)
         result = handler.handle_event(sample_event)
         assert result is True
 
-    def test_handle_event_calls_error_handler_on_exception(self, ConcreteEventHandler, mock_logger, sample_event):
+    def test_handle_event_calls_error_handler_on_exception(
+        self, ConcreteEventHandler, mock_logger, sample_event
+    ):
         def raise_error():
             raise ValueError("test error")
 
@@ -72,7 +82,9 @@ class TestUDMEventHandler:
         with pytest.raises(ValueError, match="test error"):
             handler.handle_event(sample_event)
         assert handler.error_called_with is not None
-        metadata, old, new, exc_type, exc_value, exc_traceback = handler.error_called_with
+        metadata, old, new, exc_type, exc_value, exc_traceback = (
+            handler.error_called_with
+        )
         assert isinstance(exc_value, ValueError)
         assert str(exc_value) == "test error"
 
@@ -97,7 +109,9 @@ class TestUDMEventHandler:
             mock_dn.return_value = MagicMock()
             mock_dn.side_effect = lambda dn: dn
 
-            metadata, old, new, has_moved = UDMEventHandler._event_to_udm(sample_move_event)
+            metadata, old, new, has_moved = UDMEventHandler._event_to_udm(
+                sample_move_event
+            )
             assert has_moved is True
 
     def test_diff_returns_changed_keys(self, mock_logger, sample_event):
@@ -143,7 +157,9 @@ class TestUDMEventHandler:
         with pytest.raises(KeyError):
             UDMEventHandler._event_to_udm(event)
 
-    def test_handle_event_with_move_modifies_attributes(self, ConcreteEventHandler, mock_logger, sample_move_event):
+    def test_handle_event_with_move_modifies_attributes(
+        self, ConcreteEventHandler, mock_logger, sample_move_event
+    ):
         handler = ConcreteEventHandler(mock_logger)
         handler.handle_event(sample_move_event)
         assert handler.modify_called_with is not None
@@ -225,7 +241,9 @@ class TestConsumerModuleInit:
 
 
 class TestConsumerModuleCredentials:
-    def test_get_subscription_credentials_reads_file(self, mock_logger, tmp_path, temp_config_file):
+    def test_get_subscription_credentials_reads_file(
+        self, mock_logger, tmp_path, temp_config_file
+    ):
         config_dir = str(tmp_path)
         temp_config_file("myuser", "mypassword")
 
@@ -240,7 +258,9 @@ class TestConsumerModuleCredentials:
         assert name == "myuser"
         assert password == "mypassword"
 
-    def test_get_subscription_credentials_returns_none_when_missing(self, mock_logger, tmp_path):
+    def test_get_subscription_credentials_returns_none_when_missing(
+        self, mock_logger, tmp_path
+    ):
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
@@ -252,7 +272,9 @@ class TestConsumerModuleCredentials:
         assert name is None
         assert password is None
 
-    def test_get_subscription_credentials_partial_config_missing_password(self, mock_logger, tmp_path):
+    def test_get_subscription_credentials_partial_config_missing_password(
+        self, mock_logger, tmp_path
+    ):
         config_dir = str(tmp_path)
         config_file = os.path.join(config_dir, "provisioning_config.json")
         with open(config_file, "w") as f:
@@ -269,7 +291,9 @@ class TestConsumerModuleCredentials:
         assert name is None
         assert password is None
 
-    def test_get_subscription_credentials_partial_config_missing_name(self, mock_logger, tmp_path):
+    def test_get_subscription_credentials_partial_config_missing_name(
+        self, mock_logger, tmp_path
+    ):
         config_dir = str(tmp_path)
         config_file = os.path.join(config_dir, "provisioning_config.json")
         with open(config_file, "w") as f:
@@ -303,7 +327,9 @@ class TestConsumerModuleCredentials:
         assert data["subscription_name"] == "testuser"
         assert data["subscription_password"] == "testpassword"
 
-    def test_save_subscription_credentials_sets_correct_permissions(self, mock_logger, tmp_path):
+    def test_save_subscription_credentials_sets_correct_permissions(
+        self, mock_logger, tmp_path
+    ):
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
@@ -330,14 +356,18 @@ class TestConsumerModuleSubscribe:
         consumer = ConsumerModule(handler, session=mock_session, **config)
         consumer.subscription_name = "test-sub"
         consumer.subscription_password = "test-pass"
-        consumer.subscribe("admin", "adminpass", [{"realm": "udm", "topic": "users/user"}])
+        consumer.subscribe(
+            "admin", "adminpass", [{"realm": "udm", "topic": "users/user"}]
+        )
 
         mock_session.post.assert_called_once()
         call_args = mock_session.post.call_args
         assert "https://example.com/v1/subscriptions" in call_args[0][0]
         assert call_args[1]["auth"] == ("admin", "adminpass")
 
-    def test_subscribe_saves_credentials_on_success(self, mock_logger, tmp_path, mock_session):
+    def test_subscribe_saves_credentials_on_success(
+        self, mock_logger, tmp_path, mock_session
+    ):
         handler = MagicMock()
         config = {
             "name": "test-consumer",
@@ -348,12 +378,16 @@ class TestConsumerModuleSubscribe:
         consumer = ConsumerModule(handler, session=mock_session, **config)
         consumer.subscription_name = "test-sub"
         consumer.subscription_password = "test-pass"
-        consumer.subscribe("admin", "adminpass", [{"realm": "udm", "topic": "users/user"}])
+        consumer.subscribe(
+            "admin", "adminpass", [{"realm": "udm", "topic": "users/user"}]
+        )
 
         config_file = os.path.join(str(tmp_path), "provisioning_config.json")
         assert os.path.exists(config_file)
 
-    def test_subscribe_reuses_existing_credentials(self, mock_logger, tmp_path, mock_session, temp_config_file):
+    def test_subscribe_reuses_existing_credentials(
+        self, mock_logger, tmp_path, mock_session, temp_config_file
+    ):
         handler = MagicMock()
         config = {
             "name": "test-consumer",
@@ -363,13 +397,17 @@ class TestConsumerModuleSubscribe:
         temp_config_file("existing_user", "existing_password")
 
         consumer = ConsumerModule(handler, session=mock_session, **config)
-        consumer.subscribe("admin", "adminpass", [{"realm": "udm", "topic": "users/user"}])
+        consumer.subscribe(
+            "admin", "adminpass", [{"realm": "udm", "topic": "users/user"}]
+        )
 
         post_call = mock_session.post.call_args
         create_json = post_call[1]["json"]
         assert create_json["name"] == "existing_user"
 
-    def test_subscribe_raises_on_error_response(self, mock_logger, tmp_path, mock_session):
+    def test_subscribe_raises_on_error_response(
+        self, mock_logger, tmp_path, mock_session
+    ):
         error_response = MagicMock()
         error_response.status_code = 500
         error_response.text = "Internal Server Error"
@@ -384,9 +422,13 @@ class TestConsumerModuleSubscribe:
 
         consumer = ConsumerModule(handler, session=mock_session, **config)
         with pytest.raises(SubscriptionError):
-            consumer.subscribe("admin", "adminpass", [{"realm": "udm", "topic": "users/user"}])
+            consumer.subscribe(
+                "admin", "adminpass", [{"realm": "udm", "topic": "users/user"}]
+            )
 
-    def test_subscribe_generates_new_credentials_if_missing(self, mock_logger, tmp_path, mock_session):
+    def test_subscribe_generates_new_credentials_if_missing(
+        self, mock_logger, tmp_path, mock_session
+    ):
         handler = MagicMock()
         config = {
             "name": "test-consumer",
@@ -395,7 +437,9 @@ class TestConsumerModuleSubscribe:
         }
 
         consumer = ConsumerModule(handler, session=mock_session, **config)
-        consumer.subscribe("admin", "adminpass", [{"realm": "udm", "topic": "users/user"}])
+        consumer.subscribe(
+            "admin", "adminpass", [{"realm": "udm", "topic": "users/user"}]
+        )
 
         post_call = mock_session.post.call_args
         create_json = post_call[1]["json"]
@@ -404,7 +448,9 @@ class TestConsumerModuleSubscribe:
 
 
 class TestConsumerModuleStep:
-    def test_step_fetches_and_handles_event(self, mock_logger, tmp_path, mock_session, sample_event):
+    def test_step_fetches_and_handles_event(
+        self, mock_logger, tmp_path, mock_session, sample_event
+    ):
         handler = MagicMock()
         handler.handle_event.return_value = True
         config = {
@@ -424,7 +470,10 @@ class TestConsumerModuleStep:
         mock_response.status_code = 200
         mock_session.patch.return_value = mock_response
 
-        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
+        with patch(
+            "provisioning_consumer_lib.consumer.requests.Session",
+            return_value=mock_session,
+        ):
             consumer = ConsumerModule(handler, **config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -448,7 +497,10 @@ class TestConsumerModuleStep:
 
         handler.handle_event.return_value = True
 
-        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
+        with patch(
+            "provisioning_consumer_lib.consumer.requests.Session",
+            return_value=mock_session,
+        ):
             consumer = ConsumerModule(handler, **config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -457,7 +509,9 @@ class TestConsumerModuleStep:
 
         handler.handle_event.assert_not_called()
 
-    def test_step_does_not_acknowledge_on_handler_failure(self, mock_logger, tmp_path, mock_session, sample_event):
+    def test_step_does_not_acknowledge_on_handler_failure(
+        self, mock_logger, tmp_path, mock_session, sample_event
+    ):
         handler = MagicMock()
         config = {
             "name": "test-consumer",
@@ -474,7 +528,10 @@ class TestConsumerModuleStep:
         mock_patch_response.status_code = 200
         mock_session.patch.return_value = mock_patch_response
 
-        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
+        with patch(
+            "provisioning_consumer_lib.consumer.requests.Session",
+            return_value=mock_session,
+        ):
             consumer = ConsumerModule(handler, **config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -483,7 +540,9 @@ class TestConsumerModuleStep:
 
         mock_session.patch.assert_not_called()
 
-    def test_step_with_custom_long_polling_timeout(self, mock_logger, tmp_path, mock_session):
+    def test_step_with_custom_long_polling_timeout(
+        self, mock_logger, tmp_path, mock_session
+    ):
         handler = MagicMock()
         config = {
             "name": "test-consumer",
@@ -494,7 +553,10 @@ class TestConsumerModuleStep:
         mock_session.get.return_value.status_code = 200
         mock_session.get.return_value.json.return_value = None
 
-        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
+        with patch(
+            "provisioning_consumer_lib.consumer.requests.Session",
+            return_value=mock_session,
+        ):
             consumer = ConsumerModule(handler, **config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -507,7 +569,9 @@ class TestConsumerModuleStep:
 
 
 class TestConsumerModuleFetchEvent:
-    def test_fetch_event_raises_when_no_credentials(self, mock_logger, tmp_path, mock_session):
+    def test_fetch_event_raises_when_no_credentials(
+        self, mock_logger, tmp_path, mock_session
+    ):
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
@@ -515,7 +579,10 @@ class TestConsumerModuleFetchEvent:
             "config_dir": str(tmp_path),
         }
 
-        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
+        with patch(
+            "provisioning_consumer_lib.consumer.requests.Session",
+            return_value=mock_session,
+        ):
             consumer = ConsumerModule(**config)
             consumer.subscription_name = None
             consumer.subscription_password = "somepass"
@@ -523,7 +590,9 @@ class TestConsumerModuleFetchEvent:
             with pytest.raises(QueueAccessError):
                 consumer._fetch_event(10)
 
-    def test_fetch_event_raises_when_no_password(self, mock_logger, tmp_path, mock_session):
+    def test_fetch_event_raises_when_no_password(
+        self, mock_logger, tmp_path, mock_session
+    ):
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
@@ -531,7 +600,10 @@ class TestConsumerModuleFetchEvent:
             "config_dir": str(tmp_path),
         }
 
-        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
+        with patch(
+            "provisioning_consumer_lib.consumer.requests.Session",
+            return_value=mock_session,
+        ):
             consumer = ConsumerModule(**config)
             consumer.subscription_name = "somename"
             consumer.subscription_password = None
@@ -539,7 +611,9 @@ class TestConsumerModuleFetchEvent:
             with pytest.raises(QueueAccessError):
                 consumer._fetch_event(10)
 
-    def test_fetch_event_returns_event_on_success(self, mock_logger, tmp_path, mock_session, sample_event):
+    def test_fetch_event_returns_event_on_success(
+        self, mock_logger, tmp_path, mock_session, sample_event
+    ):
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
@@ -550,7 +624,10 @@ class TestConsumerModuleFetchEvent:
         mock_session.get.return_value.status_code = 200
         mock_session.get.return_value.json.return_value = sample_event
 
-        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
+        with patch(
+            "provisioning_consumer_lib.consumer.requests.Session",
+            return_value=mock_session,
+        ):
             consumer = ConsumerModule(**config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -569,7 +646,10 @@ class TestConsumerModuleFetchEvent:
         mock_session.get.return_value.status_code = 401
         mock_session.get.return_value.text = "Unauthorized"
 
-        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
+        with patch(
+            "provisioning_consumer_lib.consumer.requests.Session",
+            return_value=mock_session,
+        ):
             consumer = ConsumerModule(**config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -577,7 +657,9 @@ class TestConsumerModuleFetchEvent:
             with pytest.raises(QueueAccessError):
                 consumer._fetch_event(10)
 
-    def test_fetch_event_raises_on_400_bad_request(self, mock_logger, tmp_path, mock_session):
+    def test_fetch_event_raises_on_400_bad_request(
+        self, mock_logger, tmp_path, mock_session
+    ):
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
@@ -588,7 +670,10 @@ class TestConsumerModuleFetchEvent:
         mock_session.get.return_value.status_code = 400
         mock_session.get.return_value.text = "Bad Request"
 
-        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
+        with patch(
+            "provisioning_consumer_lib.consumer.requests.Session",
+            return_value=mock_session,
+        ):
             consumer = ConsumerModule(**config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -596,7 +681,9 @@ class TestConsumerModuleFetchEvent:
             with pytest.raises(QueueAccessError):
                 consumer._fetch_event(10)
 
-    def test_fetch_event_raises_on_403_forbidden(self, mock_logger, tmp_path, mock_session):
+    def test_fetch_event_raises_on_403_forbidden(
+        self, mock_logger, tmp_path, mock_session
+    ):
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
@@ -607,7 +694,10 @@ class TestConsumerModuleFetchEvent:
         mock_session.get.return_value.status_code = 403
         mock_session.get.return_value.text = "Forbidden"
 
-        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
+        with patch(
+            "provisioning_consumer_lib.consumer.requests.Session",
+            return_value=mock_session,
+        ):
             consumer = ConsumerModule(**config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -615,7 +705,9 @@ class TestConsumerModuleFetchEvent:
             with pytest.raises(QueueAccessError):
                 consumer._fetch_event(10)
 
-    def test_fetch_event_raises_on_404_not_found(self, mock_logger, tmp_path, mock_session):
+    def test_fetch_event_raises_on_404_not_found(
+        self, mock_logger, tmp_path, mock_session
+    ):
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
@@ -626,7 +718,10 @@ class TestConsumerModuleFetchEvent:
         mock_session.get.return_value.status_code = 404
         mock_session.get.return_value.text = "Not Found"
 
-        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
+        with patch(
+            "provisioning_consumer_lib.consumer.requests.Session",
+            return_value=mock_session,
+        ):
             consumer = ConsumerModule(**config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -636,7 +731,9 @@ class TestConsumerModuleFetchEvent:
 
 
 class TestConsumerModuleAcknowledgeEvent:
-    def test_acknowledge_event_calls_correct_endpoint(self, mock_logger, tmp_path, mock_session):
+    def test_acknowledge_event_calls_correct_endpoint(
+        self, mock_logger, tmp_path, mock_session
+    ):
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
@@ -648,7 +745,10 @@ class TestConsumerModuleAcknowledgeEvent:
         mock_response.status_code = 200
         mock_session.patch.return_value = mock_response
 
-        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
+        with patch(
+            "provisioning_consumer_lib.consumer.requests.Session",
+            return_value=mock_session,
+        ):
             consumer = ConsumerModule(**config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -661,7 +761,9 @@ class TestConsumerModuleAcknowledgeEvent:
         assert "123" in call_args[0][0]
         assert call_args[1]["json"] == {"status": "ok"}
 
-    def test_acknowledge_event_logs_error_on_failure(self, mock_logger, tmp_path, mock_session):
+    def test_acknowledge_event_logs_error_on_failure(
+        self, mock_logger, tmp_path, mock_session
+    ):
         handler = MagicMock()
         config = {
             "name": "test-consumer",
@@ -674,7 +776,10 @@ class TestConsumerModuleAcknowledgeEvent:
         mock_response.text = "Server Error"
         mock_session.patch.return_value = mock_response
 
-        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
+        with patch(
+            "provisioning_consumer_lib.consumer.requests.Session",
+            return_value=mock_session,
+        ):
             consumer = ConsumerModule(handler, **config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -684,7 +789,9 @@ class TestConsumerModuleAcknowledgeEvent:
 
         assert mock_response.status_code != 200
 
-    def test_acknowledge_event_missing_sequence_number(self, mock_logger, tmp_path, mock_session):
+    def test_acknowledge_event_missing_sequence_number(
+        self, mock_logger, tmp_path, mock_session
+    ):
         handler = MagicMock()
         config = {
             "name": "test-consumer",
@@ -696,7 +803,10 @@ class TestConsumerModuleAcknowledgeEvent:
         mock_response.status_code = 200
         mock_session.patch.return_value = mock_response
 
-        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
+        with patch(
+            "provisioning_consumer_lib.consumer.requests.Session",
+            return_value=mock_session,
+        ):
             consumer = ConsumerModule(handler, **config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -741,7 +851,9 @@ class TestConsumerModuleLoop:
             "config_dir": str(tmp_path),
         }
 
-        consumer = ConsumerModule(handler, session=mock_session, logger=mock_consumer_logger, **config)
+        consumer = ConsumerModule(
+            handler, session=mock_session, logger=mock_consumer_logger, **config
+        )
 
         call_count = 0
 
