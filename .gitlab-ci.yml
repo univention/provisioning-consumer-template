@@ -22,21 +22,21 @@ build:
     - sed -i -re 's/^(Types. deb)$/\1 deb-src/' /etc/apt/sources.list.d/debian.sources
     - apt-get update
     - DEBIAN_FRONTEND=noninteractive apt-get build-dep -y python3-ldap
-    - python -m build
+    - python -m build ./lib
   artifacts:
     paths:
-      - dist/
+      - lib/dist/
 
 test:
   stage: test
   script:
+    - pip install lib/dist/*.whl
     - pip install .[test]
-    - pip install dist/*.whl
     - pytest
 
 publish:
   stage: publish
   script:
-    - TWINE_PASSWORD=${CI_JOB_TOKEN} TWINE_USERNAME=gitlab-ci-token python -m twine upload --repository-url ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi dist/*
+    - TWINE_PASSWORD=${CI_JOB_TOKEN} TWINE_USERNAME=gitlab-ci-token python -m twine upload --repository-url ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi lib/dist/*
   rules:
     - if: $CI_COMMIT_TAG

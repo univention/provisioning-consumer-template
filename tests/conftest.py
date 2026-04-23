@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 @pytest.fixture(autouse=True)
 def patch_dn():
-    with patch("provisioning_consumer.consumer.DN") as mock_dn:
+    with patch("provisioning_consumer_lib.consumer.DN") as mock_dn:
         mock_dn.side_effect = lambda dn: dn
         yield mock_dn
 
@@ -123,7 +123,7 @@ def mock_session():
 
 @pytest.fixture
 def ConcreteEventHandler(mock_logger):
-    from provisioning_consumer.consumer import UDMEventHandler
+    from provisioning_consumer_lib.consumer import UDMEventHandler
 
     class ConcreteEventHandler(UDMEventHandler):
         def __init__(self, logger, create_handler=None, modify_handler=None, remove_handler=None, error_handler_fn=None):

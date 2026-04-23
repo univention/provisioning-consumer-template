@@ -8,7 +8,7 @@ import tempfile
 import pytest
 from unittest.mock import MagicMock, patch, call
 
-from provisioning_consumer.consumer import (
+from provisioning_consumer_lib.consumer import (
     UDMEventHandler,
     ConsumerModule,
     QueueAccessError,
@@ -93,7 +93,7 @@ class TestUDMEventHandler:
         assert has_moved is False
 
     def test_event_to_udm_detects_move(self, mock_logger, sample_move_event):
-        with patch("provisioning_consumer.consumer.DN") as mock_dn:
+        with patch("provisioning_consumer_lib.consumer.DN") as mock_dn:
             mock_dn.return_value = MagicMock()
             mock_dn.side_effect = lambda dn: dn
 
@@ -153,7 +153,7 @@ class TestUDMEventHandler:
 
 class TestConsumerModuleInit:
     def test_init_requires_handler(self, mock_logger, config_dict):
-        from provisioning_consumer.consumer import EventHandler
+        from provisioning_consumer_lib.consumer import EventHandler
 
         class MockHandler(EventHandler):
             def handle_event(self, event):
@@ -424,7 +424,7 @@ class TestConsumerModuleStep:
         mock_response.status_code = 200
         mock_session.patch.return_value = mock_response
 
-        with patch("provisioning_consumer.consumer.requests.Session", return_value=mock_session):
+        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
             consumer = ConsumerModule(handler, **config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -448,7 +448,7 @@ class TestConsumerModuleStep:
 
         handler.handle_event.return_value = True
 
-        with patch("provisioning_consumer.consumer.requests.Session", return_value=mock_session):
+        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
             consumer = ConsumerModule(handler, **config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -474,7 +474,7 @@ class TestConsumerModuleStep:
         mock_patch_response.status_code = 200
         mock_session.patch.return_value = mock_patch_response
 
-        with patch("provisioning_consumer.consumer.requests.Session", return_value=mock_session):
+        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
             consumer = ConsumerModule(handler, **config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -494,7 +494,7 @@ class TestConsumerModuleStep:
         mock_session.get.return_value.status_code = 200
         mock_session.get.return_value.json.return_value = None
 
-        with patch("provisioning_consumer.consumer.requests.Session", return_value=mock_session):
+        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
             consumer = ConsumerModule(handler, **config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -515,7 +515,7 @@ class TestConsumerModuleFetchEvent:
             "config_path": str(tmp_path),
         }
 
-        with patch("provisioning_consumer.consumer.requests.Session", return_value=mock_session):
+        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
             consumer = ConsumerModule(**config)
             consumer.subscription_name = None
             consumer.subscription_password = "somepass"
@@ -531,7 +531,7 @@ class TestConsumerModuleFetchEvent:
             "config_path": str(tmp_path),
         }
 
-        with patch("provisioning_consumer.consumer.requests.Session", return_value=mock_session):
+        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
             consumer = ConsumerModule(**config)
             consumer.subscription_name = "somename"
             consumer.subscription_password = None
@@ -550,7 +550,7 @@ class TestConsumerModuleFetchEvent:
         mock_session.get.return_value.status_code = 200
         mock_session.get.return_value.json.return_value = sample_event
 
-        with patch("provisioning_consumer.consumer.requests.Session", return_value=mock_session):
+        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
             consumer = ConsumerModule(**config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -569,7 +569,7 @@ class TestConsumerModuleFetchEvent:
         mock_session.get.return_value.status_code = 401
         mock_session.get.return_value.text = "Unauthorized"
 
-        with patch("provisioning_consumer.consumer.requests.Session", return_value=mock_session):
+        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
             consumer = ConsumerModule(**config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -588,7 +588,7 @@ class TestConsumerModuleFetchEvent:
         mock_session.get.return_value.status_code = 400
         mock_session.get.return_value.text = "Bad Request"
 
-        with patch("provisioning_consumer.consumer.requests.Session", return_value=mock_session):
+        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
             consumer = ConsumerModule(**config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -607,7 +607,7 @@ class TestConsumerModuleFetchEvent:
         mock_session.get.return_value.status_code = 403
         mock_session.get.return_value.text = "Forbidden"
 
-        with patch("provisioning_consumer.consumer.requests.Session", return_value=mock_session):
+        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
             consumer = ConsumerModule(**config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -626,7 +626,7 @@ class TestConsumerModuleFetchEvent:
         mock_session.get.return_value.status_code = 404
         mock_session.get.return_value.text = "Not Found"
 
-        with patch("provisioning_consumer.consumer.requests.Session", return_value=mock_session):
+        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
             consumer = ConsumerModule(**config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -648,7 +648,7 @@ class TestConsumerModuleAcknowledgeEvent:
         mock_response.status_code = 200
         mock_session.patch.return_value = mock_response
 
-        with patch("provisioning_consumer.consumer.requests.Session", return_value=mock_session):
+        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
             consumer = ConsumerModule(**config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -674,7 +674,7 @@ class TestConsumerModuleAcknowledgeEvent:
         mock_response.text = "Server Error"
         mock_session.patch.return_value = mock_response
 
-        with patch("provisioning_consumer.consumer.requests.Session", return_value=mock_session):
+        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
             consumer = ConsumerModule(handler, **config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -696,7 +696,7 @@ class TestConsumerModuleAcknowledgeEvent:
         mock_response.status_code = 200
         mock_session.patch.return_value = mock_response
 
-        with patch("provisioning_consumer.consumer.requests.Session", return_value=mock_session):
+        with patch("provisioning_consumer_lib.consumer.requests.Session", return_value=mock_session):
             consumer = ConsumerModule(handler, **config)
             consumer.subscription_name = "test-sub"
             consumer.subscription_password = "test-pass"
@@ -734,7 +734,7 @@ class TestConsumerModuleLoop:
     def test_loop_sleeps_on_queue_access_error(self, tmp_path, mock_session):
         handler = MagicMock()
 
-        with patch("provisioning_consumer.consumer.getLogger") as mock_get_logger:
+        with patch("provisioning_consumer_lib.consumer.getLogger") as mock_get_logger:
             mock_consumer_logger = MagicMock()
             mock_get_logger.return_value = mock_consumer_logger
 
@@ -757,7 +757,7 @@ class TestConsumerModuleLoop:
 
             consumer.step = step_side_effect
 
-            with patch("provisioning_consumer.consumer.time.sleep") as mock_sleep:
+            with patch("provisioning_consumer_lib.consumer.time.sleep") as mock_sleep:
                 with pytest.raises(SystemExit):
                     consumer.loop()
 

@@ -7,13 +7,15 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /app
 
 # Copy dependency manifests first for better layer caching
-COPY pyproject.toml .
+COPY lib/pyproject.toml lib/
+COPY lib/src/ lib/src/
 
-# Install dependencies into an isolated venv inside /app/.venv
+# Install the library (with its dependencies) into an isolated venv
 RUN uv venv .venv && \
-    uv pip install --python .venv/bin/python requests ldap3
+    uv pip install --python .venv/bin/python ./lib
 
-# Copy source and install the package itself (no deps, already installed)
+# Copy application source and install the package itself (no deps, already installed)
+COPY pyproject.toml .
 COPY src/ src/
 RUN uv pip install --python .venv/bin/python --no-deps .
 

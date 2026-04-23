@@ -1,10 +1,11 @@
 import time
 
+from provisioning_consumer_lib import ConsumerModule, EventHandler, DN
+
 
 def main() -> None:
     print("Hello, World!")
 
-    # Sleep indefinitely, waking every second to remain interruptible
     while True:
         time.sleep(1)
 

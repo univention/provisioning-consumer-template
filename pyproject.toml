@@ -1,21 +1,20 @@
 [project]
 name = "provisioning-consumer"
 version = "0.1.0"
-description = "A Provisioning consumer"
+description = "A Provisioning consumer application (template)"
 requires-python = ">=3.11"
 dependencies = [
-    "ldap3",
-    "requests>=2.32.0",
+    "provisioning-consumer-lib",
 ]
 
 [project.optional-dependencies]
-python-ldap = [
-    "python-ldap>=3.4.0",
-]
 test = [
     "pytest>=8.0",
     "pytest-mock>=3.14",
 ]
+
+[tool.uv.sources]
+provisioning-consumer-lib = { path = "lib" }
 
 [project.scripts]
 provisioning-consumer = "provisioning_consumer.main:main"
