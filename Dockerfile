@@ -17,6 +17,7 @@ RUN uv venv .venv && \
 # Copy application source and install the package itself (no deps, already installed)
 COPY pyproject.toml .
 COPY src/ src/
+RUN uv pip install --python .venv/bin/python loguru
 RUN uv pip install --python .venv/bin/python --no-deps .
 
 # Fix symlink: distroless python3 image has the Python executable in /usr/bin,

@@ -32,6 +32,7 @@ test:
   script:
     - pip install lib/dist/*.whl
     - pip install .[test]
+    - pip install pytest pytest-mock
     - pytest
 
 publish:

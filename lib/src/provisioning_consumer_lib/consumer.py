@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Univention GmbH
 # SPDX-License-Identifier: AGPL-3.0-only
+
 import copy
 import json
 import logging
@@ -8,13 +9,13 @@ import sys
 import time
 import types
 import secrets
-from typing import Any, Mapping, Iterable, Tuple
+from typing import Any, Mapping, Iterable, Tuple, Union, TypeAlias
 from logging import getLogger
 from .dn import DN
 
 import requests
 
-AttributeMapping = Mapping[str, Any]
+AttributeMapping: TypeAlias = dict[str, Any]
 FN_CONFIG = "config.json"
 ERROR_TIMEOUT = 60  # sleep duration after failed provisioning queue access in seconds
 
@@ -34,7 +35,7 @@ class SubscriptionError(Exception):
 
 
 class EventHandler:
-    def __init__(self, logger: logging.Logger, *args, **kwargs) -> None:
+    def __init__(self, logger: Union["loguru.logger", logging.Logger], *args, **kwargs) -> None:
         self.logger = logger
 
     def handle_event(self, event: dict[str, Any]) -> bool:
@@ -63,9 +64,9 @@ class UDMEventHandler(EventHandler):
                 self._handle_remove(metadata, old)
             else:
                 self._handle_create(metadata, new)
-        except SystemExit as e:
+        except SystemExit:
             raise
-        except Exception as e:  # noqa:
+        except Exception:  # noqa:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             self._error_handler(metadata, old, new, exc_type, exc_value, exc_traceback)
             return False
@@ -163,7 +164,13 @@ class UDMEventHandler(EventHandler):
 
 
 class ConsumerModule:
-    def __init__(self, handler: EventHandler, session: requests.Session | None = None, *args, **kwargs):
+    def __init__(
+            self,
+            handler: EventHandler, session: requests.Session | None = None,
+            logger: Union["loguru.logger", logging.Logger] | None = None,
+            *args,
+            **kwargs
+    ):
         """
         ConsumerModule
         :param EventHandler handler:
@@ -176,7 +183,7 @@ class ConsumerModule:
         self.handler = handler
         self.config = kwargs
         self.check_config()
-        self.logger = getLogger(self.config["name"])
+        self.logger = logger if logger is not None else getLogger(self.config["name"])
         self.logger.info(f"Starting consumer {self.config['name']}")
         self.session = session if session is not None else requests.Session()
         self.subscription_name, self.subscription_password = self._get_subscription_credentials()
