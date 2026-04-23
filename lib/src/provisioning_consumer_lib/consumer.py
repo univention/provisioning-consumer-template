@@ -38,6 +38,13 @@ class EventHandler:
     def __init__(self, logger: Union["loguru.logger", logging.Logger], *args, **kwargs) -> None:
         self.logger = logger
 
+    def is_relevant(self, event: dict[str, Any]) -> bool:
+        """
+        Indicates if the event shall be processed by handle_event().
+        Can be used to filter the events.
+        """
+        return True
+
     def handle_event(self, event: dict[str, Any]) -> bool:
         """
         Calls the handler functions depending on the event type.
@@ -295,7 +302,12 @@ class ConsumerModule:
         """
         event = self._fetch_event(long_polling_timeout)
         if event:
-            if self.handler.handle_event(event):
+            self.logger.debug(f"Event {event['sequence_number']} has been fetched.")
+            if not self.handler.is_relevant(event):
+                self.logger.debug(f"Skipped and acknowledged event {event['sequence_number']} as requested.")
+                self._acknowledge_event(event)
+            elif self.handler.handle_event(event):
+                self.logger.debug(f"Event {event['sequence_number']} has not been processed successfully.")
                 self._acknowledge_event(event)
         else:
             # If the queue is empty, it uses long polling with a default timeout of <long_polling_timeout> seconds,
