@@ -1,13 +1,72 @@
-# Provisioning Consumer library and Docker template
+# Provisioning Consumer — library and Docker template
 
-This repository contains a pip-installable Python framework and a `Dockerfile`
-that you can use to quickly create a Provisioning Consumer.
+This repository contains two things:
 
-Container images build with the provided `Dockerfile` will be [distroless](https://github.com/GoogleContainerTools/distroless).
+1. **`lib/`** — a pip-installable Python library (`provisioning-consumer-lib`) with base classes for writing Provisioning Consumers
+2. **`src/`** — a minimal template application that demonstrates how to use the library
 
-## Usage
+Container images built with the provided `Dockerfile` will be [distroless](https://github.com/GoogleContainerTools/distroless).
 
-TODO
+## Repository layout
+
+```
+.
+├── Dockerfile
+├── pyproject.toml          # Template application (provisioning-consumer)
+├── src/
+│   └── provisioning_consumer/
+│       ├── __init__.py
+│       └── main.py         # Entry point — customise this
+└── lib/
+    ├── pyproject.toml      # Library (provisioning-consumer-lib)
+    └── src/
+        └── provisioning_consumer_lib/
+            ├── consumer.py # ConsumerModule, EventHandler, UDMEventHandler
+            └── dn.py       # DN helper class
+```
+
+## Quick start
+
+### 1. Implement your event handler
+
+Edit `src/provisioning_consumer/main.py` and subclass `UDMEventHandler`:
+
+```python
+from provisioning_consumer_lib import ConsumerModule, UDMEventHandler, AttributeMapping
+
+class MyEventHandler(UDMEventHandler):
+    def _handle_create(self, metadata: AttributeMapping, new: AttributeMapping) -> None:
+        ...
+
+    def _handle_modify(self, metadata: AttributeMapping, old: AttributeMapping,
+                       new: AttributeMapping, has_moved: bool) -> None:
+        ...
+
+    def _handle_remove(self, metadata: AttributeMapping, old: AttributeMapping) -> None:
+        ...
+```
+
+### 2. Wire up `ConsumerModule` and run
+
+```python
+from loguru import logger
+
+def main() -> None:
+    handler = MyEventHandler(logger)
+    consumer = ConsumerModule(
+        handler=handler,
+        name="my-consumer",
+        provisioning_url="https://<nubus-fqdn>/univention/provisioning/",
+        config_dir="/var/lib/univention/consumer",
+    )
+    consumer.subscribe(
+        admin_username="provisioning_admin",
+        admin_password="<password>",
+        topics=[{"realm": "udm", "topic": "users/user"}],
+        prefill=True,
+    )
+    consumer.consume_loop()
+```
 
 ## Prerequisites
 
@@ -30,30 +89,28 @@ uv sync
 
 ```bash
 . .venv/bin/activate
-
 provisioning-consumer
-
 deactivate
 ```
 
-Or, without activating the venv:
+Or without activating the venv:
 
 ```bash
 uv run provisioning-consumer
 ```
 
-Stop the process at any time with **Ctrl + C**.
+Stop the process at any time with **Ctrl+C**.
 
 ## Docker
 
 ### Build the image
 
-The image will be built in two stages:
+The image is built in two stages:
 
-1. A virtual env with the project's dependencies and the project itself is built in a standard Python container (`python:3.12-slim`).
-2. The virtual env is copied into a distroless base container (`gcr.io/distroless/python3-debian12:nonroot`).
+1. A virtual env with the project's dependencies is built in a standard Python container (`python:3.12-slim`).
+2. The virtual env is copied into a distroless base image (`gcr.io/distroless/python3-debian12:nonroot`).
 
-The result is a small image with only your application.
+The result is a minimal image containing only your application and its dependencies.
 
 ```bash
 docker build -t provisioning-consumer:latest .
@@ -65,8 +122,11 @@ docker build -t provisioning-consumer:latest .
 docker run --rm provisioning-consumer:latest
 ```
 
-The container prints `Hello, World!` and then keeps running. Stop it with **Ctrl + C**
-(or `docker stop <container-id>` if running detached).
+Stop with **Ctrl+C** or, if running detached:
+
+```bash
+docker stop provisioning-consumer && docker rm provisioning-consumer
+```
 
 ### Run detached
 
@@ -80,22 +140,6 @@ View output:
 docker logs provisioning-consumer
 ```
 
-Stop and remove:
+## Library documentation
 
-```bash
-docker stop provisioning-consumer && docker rm provisioning-consumer
-```
-
----
-
-## Project layout
-
-```
-.
-├── Dockerfile
-├── pyproject.toml
-└── src/
-    └── provisioning_consumer/
-        ├── __init__.py
-        └── main.py         # Entry point
-```
+See [`lib/README.md`](lib/README.md) for the full API reference of `provisioning-consumer-lib`.
