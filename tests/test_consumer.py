@@ -169,7 +169,7 @@ class TestConsumerModuleInit:
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
         }
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError):
             ConsumerModule(**config)
 
     def test_init_validates_name_none(self, mock_logger):
@@ -178,7 +178,7 @@ class TestConsumerModuleInit:
             "provisioning_url": "https://example.com",
             "handler": MagicMock(),
         }
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError):
             ConsumerModule(**config)
 
     def test_init_validates_provisioning_url_missing(self, mock_logger):
@@ -187,7 +187,7 @@ class TestConsumerModuleInit:
             "provisioning_url": None,
             "handler": MagicMock(),
         }
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError):
             ConsumerModule(**config)
 
     def test_init_sets_defaults(self, mock_logger, tmp_path):
