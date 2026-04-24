@@ -14,10 +14,8 @@ from .dn import DN
 
 import loguru
 import requests
+from loguru._logger import Logger
 from typing_extensions import override
-
-if TYPE_CHECKING:
-    from loguru import Logger
 
 AttributeMapping: TypeAlias = dict[str, Any]
 FILENAME_CONFIG = "provisioning_config.json"
