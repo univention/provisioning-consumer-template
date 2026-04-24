@@ -399,9 +399,14 @@ class ConsumerModule:
                 self._acknowledge_event(event)
             elif self.handler.handle_event(event):
                 self.logger.debug(
-                    f"Event {event['sequence_number']} has not been processed successfully."
+                    f"Event {event['sequence_number']} has been processed successfully."
                 )
                 self._acknowledge_event(event)
+            else:
+                self.logger.debug(
+                    f"Event {event['sequence_number']} has not been processed."
+                )
+
         else:
             # If the queue is empty, it uses long polling
             # with a default timeout of <long_polling_timeout> seconds,
