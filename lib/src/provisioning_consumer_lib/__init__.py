@@ -1,6 +1,7 @@
 from .consumer import (
     ConsumerModule,
     EventHandler,
+    Metadata,
     UDMEventHandler,
     QueueAccessError,
     SubscriptionError,
@@ -13,6 +14,7 @@ __all__ = [
     "ConsumerModule",
     "DN",
     "EventHandler",
+    "Metadata",
     "QueueAccessError",
     "SubscriptionError",
     "UDMEventHandler",

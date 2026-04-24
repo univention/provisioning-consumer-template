@@ -2,6 +2,8 @@
 
 A Python library that provides base classes and helpers for writing Provisioning Consumers for the [Univention Nubus](https://www.univention.com/products/nubus/) provisioning service.
 
+The library is fully `async` and uses `asyncio` with `httpx` for non-blocking HTTP.
+
 ## Installation
 
 ```bash
@@ -22,7 +24,7 @@ The library provides three main building blocks:
 
 | Class | Purpose |
 |---|---|
-| `ConsumerModule` | Manages the subscription lifecycle and the event polling loop |
+| `ConsumerModule` | Manages the subscription lifecycle and the async event polling loop |
 | `UDMEventHandler` | Base class — subclass this to react to create/modify/remove events |
 | `EventHandler` | Lower-level base class for non-UDM event handling |
 
@@ -30,18 +32,20 @@ The library provides three main building blocks:
 
 ### 1. Subclass `UDMEventHandler`
 
+All handler methods are `async`, so you can freely `await` within them:
+
 ```python
-from provisioning_consumer_lib import UDMEventHandler, AttributeMapping
+from provisioning_consumer_lib import UDMEventHandler, Metadata, AttributeMapping
 
 class MyEventHandler(UDMEventHandler):
-    def _handle_create(self, metadata: AttributeMapping, new: AttributeMapping) -> None:
+    async def _handle_create(self, metadata: Metadata, new: AttributeMapping) -> None:
         self.logger.info("Created: %s", new["dn"])
 
-    def _handle_modify(self, metadata: AttributeMapping, old: AttributeMapping,
-                       new: AttributeMapping, has_moved: bool) -> None:
+    async def _handle_modify(self, metadata: Metadata, old: AttributeMapping,
+                             new: AttributeMapping, has_moved: bool) -> None:
         self.logger.info("Modified: %s (moved=%s)", new["dn"], has_moved)
 
-    def _handle_remove(self, metadata: AttributeMapping, old: AttributeMapping) -> None:
+    async def _handle_remove(self, metadata: Metadata, old: AttributeMapping) -> None:
         self.logger.info("Removed: %s", old["dn"])
 ```
 
@@ -54,52 +58,58 @@ All three methods must be implemented. They receive:
 
 ### 2. Optionally filter events with `is_relevant()`
 
-Override `is_relevant()` to skip events before they reach `handle_event()`:
+Override `is_relevant()` to skip events before they reach `handle_event()`. The method is `async`, so you can `await` within it:
 
 ```python
-def is_relevant(self, event: dict) -> bool:
+async def is_relevant(self, event: dict) -> bool:
     # Only process events for objects inside a specific OU
     return "ou=employees" in event["body"]["new"].get("dn", "")
 ```
 
 ### 3. Create `ConsumerModule` and subscribe
 
+`ConsumerModule` is an async context manager that closes the underlying HTTP client on exit:
+
 ```python
+import asyncio
 from loguru import logger
 from provisioning_consumer_lib import ConsumerModule
 
-handler = MyEventHandler(logger)
-consumer = ConsumerModule(
-    handler=handler,
-    name="my-consumer",                  # unique name for this consumer instance
-    provisioning_url="https://<nubus-fqdn>/univention/provisioning/",
-    config_dir="/var/lib/univention/consumer",  # directory for storing credentials
-)
+async def main():
+    handler = MyEventHandler(logger)
+    async with ConsumerModule(
+        handler=handler,
+        name="my-consumer",                  # unique name for this consumer instance
+        provisioning_url="https://<nubus-fqdn>/univention/provisioning/",
+        config_dir="/var/lib/univention/consumer",  # directory for storing credentials
+    ) as consumer:
+        await consumer.subscribe(
+            admin_username="provisioning_admin",
+            admin_password="<password>",
+            topics=[
+                {"realm": "udm", "topic": "users/user"},
+                {"realm": "udm", "topic": "groups/group"},
+            ],
+            prefill=True,   # replay existing objects on first subscription
+        )
+        await consumer.consume_loop()
 
-consumer.subscribe(
-    admin_username="provisioning_admin",
-    admin_password="<password>",
-    topics=[
-        {"realm": "udm", "topic": "users/user"},
-        {"realm": "udm", "topic": "groups/group"},
-    ],
-    prefill=True,   # replay existing objects on first subscription
-)
+asyncio.run(main())
 ```
 
-`subscribe()` is idempotent: if a `config.json` with valid credentials already exists in `config_dir`, the existing subscription is reused and no new subscription is created.
+`subscribe()` is idempotent: if a `provisioning_config.json` with valid credentials already exists in `config_dir`, the existing subscription is reused and no new subscription is created at the server.
 
 ### 4. Run the event loop
 
 ```python
-consumer.consume_loop()   # runs forever, handles QueueAccessError with back-off
+await consumer.consume_loop()   # runs forever, handles QueueAccessError with async back-off
 ```
 
 For custom control flow, call `process_one_event()` directly:
 
 ```python
 while True:
-    consumer.process_one_event(long_polling_timeout=10)
+    await consumer.process_one_event(long_polling_timeout=10)
 ```
 
 ## `ConsumerModule` configuration
@@ -110,8 +120,9 @@ All configuration is passed as keyword arguments to the constructor:
 |---|---|---|---|---|
 | `name` | `str` | yes | — | Unique name for this consumer |
 | `provisioning_url` | `str` | yes | — | Base URL of the provisioning service |
-| `config_dir` | `str` | no | `/var/lib/univention/consumer` | Directory where `config.json` is stored |
-| `error_timeout` | `int` | no | `60` | Seconds to wait after a `QueueAccessError` before retrying |
+| `config_dir` | `str` | no | `/var/lib/univention/consumer` | Directory where `provisioning_config.json` is stored |
+| `error_timeout` | `int` | no | `60` | Seconds to wait (via `asyncio.sleep`) after a `QueueAccessError` before retrying |
+| `session` | `httpx.AsyncClient` | no | auto-created | Custom async HTTP client (useful for testing) |
 
 ## Detecting attribute changes
 
@@ -119,7 +130,7 @@ All configuration is passed as keyword arguments to the constructor:
 
 ```python
 class MyEventHandler(UDMEventHandler):
-    def _handle_modify(self, metadata, old, new, has_moved):
+    async def _handle_modify(self, metadata, old, new, has_moved):
         changes = self.diff({"body": {"old": old, "new": new}}, keys=["mail", "groups"])
         for attr, (old_val, new_val) in changes.items():
             self.logger.info("%s changed: %r -> %r", attr, old_val, new_val)
@@ -129,10 +140,10 @@ class MyEventHandler(UDMEventHandler):
 
 If `_handle_create`, `_handle_modify`, or `_handle_remove` raises an exception, `_handle_error()` is called. The default implementation logs the exception and re-raises it, which causes `handle_event()` to return `False` and the event is **not** acknowledged (so it will be retried).
 
-Override `_handle_error()` to implement custom error handling:
+Override `_handle_error()` to implement custom error handling. The method is `async`, so you can perform I/O such as writing to a dead-letter queue or sending an alert:
 
 ```python
-def _handle_error(self, metadata, old, new, exc_type, exc_value, exc_traceback):
+async def _handle_error(self, metadata, old, new, exc_type, exc_value, exc_traceback):
     self.logger.error("Ignoring error: %s", exc_value)
     # returning without re-raising suppresses the error
 ```
@@ -157,6 +168,7 @@ DN("CN=Foo") == DN("cn=foo")       # True (case-insensitive for common attribute
 from provisioning_consumer_lib import (
     ConsumerModule,
     EventHandler,
+    Metadata,
     UDMEventHandler,
     QueueAccessError,
     SubscriptionError,

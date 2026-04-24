@@ -4,7 +4,7 @@ import os
 import json
 import tempfile
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, AsyncMock, patch
 
 
 @pytest.fixture(autouse=True)
@@ -116,14 +116,16 @@ def sample_move_event():
 
 @pytest.fixture
 def mock_session():
+    """Async HTTP client mock for httpx.AsyncClient."""
     session = MagicMock()
     response = MagicMock()
     response.status_code = 200
     response.json.return_value = {"sequence_number": 123}
     response.text = "OK"
-    session.get.return_value = response
-    session.post.return_value = response
-    session.patch.return_value = response
+    session.get = AsyncMock(return_value=response)
+    session.post = AsyncMock(return_value=response)
+    session.patch = AsyncMock(return_value=response)
+    session.aclose = AsyncMock()
     return session
 
 
@@ -150,22 +152,22 @@ def ConcreteEventHandler(mock_logger):
             self._remove_handler_fn = remove_handler
             self._error_handler_fn = error_handler_fn
 
-        def _handle_create(self, metadata, new):
+        async def _handle_create(self, metadata, new):
             self.create_called_with = (metadata, new)
             if self._create_handler_fn:
                 self._create_handler_fn()
 
-        def _handle_modify(self, metadata, old, new, has_moved):
+        async def _handle_modify(self, metadata, old, new, has_moved):
             self.modify_called_with = (metadata, old, new, has_moved)
             if self._modify_handler_fn:
                 self._modify_handler_fn()
 
-        def _handle_remove(self, metadata, old):
+        async def _handle_remove(self, metadata, old):
             self.remove_called_with = (metadata, old)
             if self._remove_handler_fn:
                 self._remove_handler_fn()
 
-        def _handle_error(self, metadata, old, new, exc_type, exc_value, exc_traceback):
+        async def _handle_error(self, metadata, old, new, exc_type, exc_value, exc_traceback):
             self.error_called_with = (
                 metadata,
                 old,
@@ -177,7 +179,7 @@ def ConcreteEventHandler(mock_logger):
             if self._error_handler_fn:
                 self._error_handler_fn()
             else:
-                super()._handle_error(
+                await super()._handle_error(
                     metadata, old, new, exc_type, exc_value, exc_traceback
                 )
 

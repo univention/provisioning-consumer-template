@@ -6,7 +6,7 @@ import sys
 import types
 import tempfile
 import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, AsyncMock, patch, call
 
 from provisioning_consumer_lib.consumer import (
     UDMEventHandler,
@@ -64,43 +64,48 @@ class TestSubscriptionError:
 
 
 class TestUDMEventHandler:
-    def test_handle_event_routes_to_create(
+    @pytest.mark.asyncio
+    async def test_handle_event_routes_to_create(
         self, ConcreteEventHandler, mock_logger, sample_create_event
     ):
         handler = ConcreteEventHandler(mock_logger)
-        result = handler.handle_event(sample_create_event)
+        result = await handler.handle_event(sample_create_event)
         assert result is True
         assert handler.create_called_with is not None
         assert handler.modify_called_with is None
         assert handler.remove_called_with is None
 
-    def test_handle_event_routes_to_modify(
+    @pytest.mark.asyncio
+    async def test_handle_event_routes_to_modify(
         self, ConcreteEventHandler, mock_logger, sample_event
     ):
         handler = ConcreteEventHandler(mock_logger)
-        result = handler.handle_event(sample_event)
+        result = await handler.handle_event(sample_event)
         assert result is True
         assert handler.create_called_with is None
         assert handler.modify_called_with is not None
         assert handler.remove_called_with is None
 
-    def test_handle_event_routes_to_remove(
+    @pytest.mark.asyncio
+    async def test_handle_event_routes_to_remove(
         self, ConcreteEventHandler, mock_logger, sample_remove_event
     ):
         handler = ConcreteEventHandler(mock_logger)
-        result = handler.handle_event(sample_remove_event)
+        result = await handler.handle_event(sample_remove_event)
         assert result is True
         assert handler.create_called_with is None
         assert handler.modify_called_with is None
         assert handler.remove_called_with is not None
 
-    def test_handle_event_returns_true_on_success(
+    @pytest.mark.asyncio
+    async def test_handle_event_returns_true_on_success(
         self, ConcreteEventHandler, mock_logger, sample_event
     ):
         handler = ConcreteEventHandler(mock_logger)
-        result = handler.handle_event(sample_event)
+        result = await handler.handle_event(sample_event)
         assert result is True
 
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("exc_class,message", [
         (ValueError, "bad value"),
         (RuntimeError, "runtime failure"),
@@ -108,7 +113,7 @@ class TestUDMEventHandler:
         (AttributeError, "no such attribute"),
         (TypeError, "wrong type"),
     ])
-    def test_handle_event_returns_false_on_exception(
+    async def test_handle_event_returns_false_on_exception(
         self, ConcreteEventHandler, mock_logger, sample_event, exc_class, message
     ):
         """handle_event returns False for any non-SystemExit exception."""
@@ -120,10 +125,11 @@ class TestUDMEventHandler:
             modify_handler=raise_error,
             error_handler_fn=lambda: None,  # suppress re-raise
         )
-        result = handler.handle_event(sample_event)
+        result = await handler.handle_event(sample_event)
         assert result is False
 
-    def test_handle_event_calls_error_handler_on_exception(
+    @pytest.mark.asyncio
+    async def test_handle_event_calls_error_handler_on_exception(
         self, ConcreteEventHandler, mock_logger, sample_event
     ):
         def raise_error():
@@ -131,7 +137,7 @@ class TestUDMEventHandler:
 
         handler = ConcreteEventHandler(mock_logger, modify_handler=raise_error)
         with pytest.raises(ValueError, match="test error"):
-            handler.handle_event(sample_event)
+            await handler.handle_event(sample_event)
         assert handler.error_called_with is not None
         metadata, old, new, exc_type, exc_value, exc_traceback = (
             handler.error_called_with
@@ -139,12 +145,13 @@ class TestUDMEventHandler:
         assert isinstance(exc_value, ValueError)
         assert str(exc_value) == "test error"
 
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("exc_class,handler_attr", [
         (ValueError, "modify_handler"),
         (RuntimeError, "create_handler"),
         (KeyError, "remove_handler"),
     ])
-    def test_handle_event_error_handler_receives_correct_exc_type(
+    async def test_handle_event_error_handler_receives_correct_exc_type(
         self, ConcreteEventHandler, mock_logger,
         sample_event, sample_create_event, sample_remove_event,
         exc_class, handler_attr,
@@ -162,13 +169,14 @@ class TestUDMEventHandler:
 
         handler = ConcreteEventHandler(mock_logger, **{handler_attr: raise_it})
         with pytest.raises(exc_class):
-            handler.handle_event(event)
+            await handler.handle_event(event)
         assert handler.error_called_with is not None
         _, _, _, exc_type, exc_value, _ = handler.error_called_with
         assert exc_type is exc_class
         assert isinstance(exc_value, exc_class)
 
-    def test_handle_event_does_not_catch_system_exit(
+    @pytest.mark.asyncio
+    async def test_handle_event_does_not_catch_system_exit(
         self, ConcreteEventHandler, mock_logger, sample_event
     ):
         """SystemExit must propagate and not be passed to _handle_error."""
@@ -177,7 +185,7 @@ class TestUDMEventHandler:
 
         handler = ConcreteEventHandler(mock_logger, modify_handler=raise_exit)
         with pytest.raises(SystemExit):
-            handler.handle_event(sample_event)
+            await handler.handle_event(sample_event)
         assert handler.error_called_with is None
 
     def test_handle_event_uses_default_logger_when_none(self):
@@ -186,7 +194,7 @@ class TestUDMEventHandler:
         import loguru
 
         class MinimalHandler(EventHandler):
-            def handle_event(self, event):
+            async def handle_event(self, event):
                 return True
 
         handler = MinimalHandler(None)
@@ -361,26 +369,28 @@ class TestUDMEventHandler:
         with pytest.raises(expected_error):
             UDMEventHandler._event_to_udm(event)
 
-    def test_handle_event_with_move_modifies_attributes(
+    @pytest.mark.asyncio
+    async def test_handle_event_with_move_modifies_attributes(
         self, ConcreteEventHandler, mock_logger, sample_move_event
     ):
         handler = ConcreteEventHandler(mock_logger)
-        handler.handle_event(sample_move_event)
+        await handler.handle_event(sample_move_event)
         assert handler.modify_called_with is not None
         metadata, old, new, has_moved = handler.modify_called_with
         assert has_moved is True
 
-    def test_is_relevant_returns_true_by_default(self, mock_logger):
+    @pytest.mark.asyncio
+    async def test_is_relevant_returns_true_by_default(self, mock_logger):
         """EventHandler.is_relevant() always returns True unless overridden."""
         from provisioning_consumer_lib.consumer import EventHandler
 
         class MinimalHandler(EventHandler):
-            def handle_event(self, event):
+            async def handle_event(self, event):
                 return True
 
         handler = MinimalHandler(mock_logger)
-        assert handler.is_relevant({}) is True
-        assert handler.is_relevant({"body": {}}) is True
+        assert await handler.is_relevant({}) is True
+        assert await handler.is_relevant({"body": {}}) is True
 
 
 class TestConsumerModuleInit:
@@ -388,7 +398,7 @@ class TestConsumerModuleInit:
         from provisioning_consumer_lib.consumer import EventHandler
 
         class MockHandler(EventHandler):
-            def handle_event(self, event):
+            async def handle_event(self, event):
                 return True
 
         handler = MockHandler(mock_logger)
@@ -758,7 +768,8 @@ class TestConsumerModuleCredentials:
 
 
 class TestConsumerModuleSubscribe:
-    def test_subscribe_creates_subscription(self, mock_logger, tmp_path, mock_session):
+    @pytest.mark.asyncio
+    async def test_subscribe_creates_subscription(self, mock_logger, tmp_path, mock_session):
         handler = MagicMock()
         config = {
             "name": "test-consumer",
@@ -769,7 +780,7 @@ class TestConsumerModuleSubscribe:
         consumer = ConsumerModule(handler, session=mock_session, **config)
         consumer.subscription_name = "test-sub"
         consumer.subscription_password = "test-pass"
-        consumer.subscribe(
+        await consumer.subscribe(
             "admin", "adminpass", [{"realm": "udm", "topic": "users/user"}]
         )
 
@@ -778,7 +789,8 @@ class TestConsumerModuleSubscribe:
         assert "https://example.com/v1/subscriptions" in call_args[0][0]
         assert call_args[1]["auth"] == ("admin", "adminpass")
 
-    def test_subscribe_saves_credentials_on_success(
+    @pytest.mark.asyncio
+    async def test_subscribe_saves_credentials_on_success(
         self, mock_logger, tmp_path, mock_session
     ):
         handler = MagicMock()
@@ -791,14 +803,15 @@ class TestConsumerModuleSubscribe:
         consumer = ConsumerModule(handler, session=mock_session, **config)
         consumer.subscription_name = "test-sub"
         consumer.subscription_password = "test-pass"
-        consumer.subscribe(
+        await consumer.subscribe(
             "admin", "adminpass", [{"realm": "udm", "topic": "users/user"}]
         )
 
         config_file = os.path.join(str(tmp_path), "provisioning_config.json")
         assert os.path.exists(config_file)
 
-    def test_subscribe_reuses_existing_credentials(
+    @pytest.mark.asyncio
+    async def test_subscribe_reuses_existing_credentials(
         self, mock_logger, tmp_path, mock_session, temp_config_file
     ):
         handler = MagicMock()
@@ -810,7 +823,7 @@ class TestConsumerModuleSubscribe:
         temp_config_file("existing_user", "existing_password")
 
         consumer = ConsumerModule(handler, session=mock_session, **config)
-        consumer.subscribe(
+        await consumer.subscribe(
             "admin", "adminpass", [{"realm": "udm", "topic": "users/user"}]
         )
 
@@ -818,6 +831,7 @@ class TestConsumerModuleSubscribe:
         create_json = post_call[1]["json"]
         assert create_json["name"] == "existing_user"
 
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("status_code,error_text", [
         (300, "Multiple Choices"),
         (400, "Bad Request"),
@@ -828,14 +842,14 @@ class TestConsumerModuleSubscribe:
         (500, "Internal Server Error"),
         (503, "Service Unavailable"),
     ])
-    def test_subscribe_raises_on_error_response(
+    async def test_subscribe_raises_on_error_response(
         self, tmp_path, mock_session, status_code, error_text
     ):
         """subscribe() raises SubscriptionError for any status >= 300."""
         error_response = MagicMock()
         error_response.status_code = status_code
         error_response.text = error_text
-        mock_session.post.return_value = error_response
+        mock_session.post = AsyncMock(return_value=error_response)
 
         handler = MagicMock()
         config = {
@@ -846,17 +860,18 @@ class TestConsumerModuleSubscribe:
 
         consumer = ConsumerModule(handler, session=mock_session, **config)
         with pytest.raises(SubscriptionError):
-            consumer.subscribe(
+            await consumer.subscribe(
                 "admin", "adminpass", [{"realm": "udm", "topic": "users/user"}]
             )
 
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("status_code", [200, 201, 204])
-    def test_subscribe_succeeds_on_2xx(self, tmp_path, mock_session, status_code):
+    async def test_subscribe_succeeds_on_2xx(self, tmp_path, mock_session, status_code):
         """subscribe() does not raise for 2xx responses."""
         ok_response = MagicMock()
         ok_response.status_code = status_code
         ok_response.text = "OK"
-        mock_session.post.return_value = ok_response
+        mock_session.post = AsyncMock(return_value=ok_response)
 
         handler = MagicMock()
         config = {
@@ -866,9 +881,10 @@ class TestConsumerModuleSubscribe:
         }
         consumer = ConsumerModule(handler, session=mock_session, **config)
         # Should not raise
-        consumer.subscribe("admin", "adminpass", [{"realm": "udm", "topic": "users/user"}])
+        await consumer.subscribe("admin", "adminpass", [{"realm": "udm", "topic": "users/user"}])
 
-    def test_subscribe_generates_new_credentials_if_missing(
+    @pytest.mark.asyncio
+    async def test_subscribe_generates_new_credentials_if_missing(
         self, mock_logger, tmp_path, mock_session
     ):
         handler = MagicMock()
@@ -879,7 +895,7 @@ class TestConsumerModuleSubscribe:
         }
 
         consumer = ConsumerModule(handler, session=mock_session, **config)
-        consumer.subscribe(
+        await consumer.subscribe(
             "admin", "adminpass", [{"realm": "udm", "topic": "users/user"}]
         )
 
@@ -888,7 +904,8 @@ class TestConsumerModuleSubscribe:
         assert create_json["name"].startswith("test-consumer-")
         assert len(create_json["password"]) > 0
 
-    def test_subscribe_new_credentials_are_unique(self, tmp_path, mock_session):
+    @pytest.mark.asyncio
+    async def test_subscribe_new_credentials_are_unique(self, tmp_path, mock_session):
         """Two subscribe() calls without existing credentials produce different credentials."""
         handler = MagicMock()
         config = {
@@ -899,7 +916,7 @@ class TestConsumerModuleSubscribe:
 
         # First subscription
         consumer1 = ConsumerModule(handler, session=mock_session, **config)
-        consumer1.subscribe("admin", "pass", [{"realm": "udm", "topic": "users/user"}])
+        await consumer1.subscribe("admin", "pass", [{"realm": "udm", "topic": "users/user"}])
         cred1 = mock_session.post.call_args[1]["json"]
 
         # Reset mock and create second independent consumer in empty dir
@@ -908,14 +925,15 @@ class TestConsumerModuleSubscribe:
         mock_session.post.reset_mock()
         config2 = {**config, "config_dir": tmp2}
         consumer2 = ConsumerModule(handler, session=mock_session, **config2)
-        consumer2.subscribe("admin", "pass", [{"realm": "udm", "topic": "users/user"}])
+        await consumer2.subscribe("admin", "pass", [{"realm": "udm", "topic": "users/user"}])
         cred2 = mock_session.post.call_args[1]["json"]
 
         assert cred1["name"] != cred2["name"]
         assert cred1["password"] != cred2["password"]
 
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("prefill", [True, False])
-    def test_subscribe_sends_prefill_flag(self, tmp_path, mock_session, prefill):
+    async def test_subscribe_sends_prefill_flag(self, tmp_path, mock_session, prefill):
         """subscribe() passes the prefill flag to the POST body."""
         handler = MagicMock()
         config = {
@@ -924,7 +942,7 @@ class TestConsumerModuleSubscribe:
             "config_dir": str(tmp_path),
         }
         consumer = ConsumerModule(handler, session=mock_session, **config)
-        consumer.subscribe(
+        await consumer.subscribe(
             "admin", "pass",
             [{"realm": "udm", "topic": "users/user"}],
             prefill=prefill,
@@ -932,7 +950,8 @@ class TestConsumerModuleSubscribe:
         create_json = mock_session.post.call_args[1]["json"]
         assert create_json["request_prefill"] is prefill
 
-    def test_subscribe_sends_topics_in_body(self, tmp_path, mock_session):
+    @pytest.mark.asyncio
+    async def test_subscribe_sends_topics_in_body(self, tmp_path, mock_session):
         """subscribe() includes all topics in the POST body."""
         topics = [
             {"realm": "udm", "topic": "users/user"},
@@ -945,16 +964,17 @@ class TestConsumerModuleSubscribe:
             "config_dir": str(tmp_path),
         }
         consumer = ConsumerModule(handler, session=mock_session, **config)
-        consumer.subscribe("admin", "pass", topics)
+        await consumer.subscribe("admin", "pass", topics)
         create_json = mock_session.post.call_args[1]["json"]
         assert create_json["realms_topics"] == topics
 
-    def test_subscribe_does_not_save_credentials_on_failure(self, tmp_path, mock_session):
+    @pytest.mark.asyncio
+    async def test_subscribe_does_not_save_credentials_on_failure(self, tmp_path, mock_session):
         """Credentials file must not be written when subscribe() raises."""
         error_response = MagicMock()
         error_response.status_code = 500
         error_response.text = "Server Error"
-        mock_session.post.return_value = error_response
+        mock_session.post = AsyncMock(return_value=error_response)
 
         config = {
             "name": "test-consumer",
@@ -964,18 +984,20 @@ class TestConsumerModuleSubscribe:
         consumer = ConsumerModule(MagicMock(), session=mock_session, **config)
 
         with pytest.raises(SubscriptionError):
-            consumer.subscribe("admin", "pass", [{"realm": "udm", "topic": "users/user"}])
+            await consumer.subscribe("admin", "pass", [{"realm": "udm", "topic": "users/user"}])
 
         config_file = os.path.join(str(tmp_path), "provisioning_config.json")
         assert not os.path.exists(config_file)
 
 
 class TestConsumerModuleStep:
-    def test_step_fetches_and_handles_event(
+    @pytest.mark.asyncio
+    async def test_step_fetches_and_handles_event(
         self, mock_logger, tmp_path, mock_session, sample_event
     ):
         handler = MagicMock()
-        handler.handle_event.return_value = True
+        handler.is_relevant = AsyncMock(return_value=True)
+        handler.handle_event = AsyncMock(return_value=True)
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
@@ -988,27 +1010,22 @@ class TestConsumerModuleStep:
         mock_session.get.return_value.status_code = 200
         mock_session.get.return_value.json.return_value = event_with_seq
         mock_session.get.return_value.text = "OK"
+        mock_session.patch.return_value.status_code = 200
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_session.patch.return_value = mock_response
+        consumer = ConsumerModule(handler, session=mock_session, **config)
+        consumer.subscription_name = "test-sub"
+        consumer.subscription_password = "test-pass"
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(handler, **config)
-            consumer.subscription_name = "test-sub"
-            consumer.subscription_password = "test-pass"
-
-            consumer.process_one_event()
+        await consumer.process_one_event()
 
         mock_session.get.assert_called()
         mock_session.patch.assert_called()
         handler.handle_event.assert_called_once_with(event_with_seq)
 
-    def test_step_does_nothing_when_no_event(self, mock_logger, tmp_path, mock_session):
+    @pytest.mark.asyncio
+    async def test_step_does_nothing_when_no_event(self, mock_logger, tmp_path, mock_session):
         handler = MagicMock()
+        handler.handle_event = AsyncMock(return_value=True)
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
@@ -1018,24 +1035,21 @@ class TestConsumerModuleStep:
         mock_session.get.return_value.status_code = 200
         mock_session.get.return_value.json.return_value = None
 
-        handler.handle_event.return_value = True
+        consumer = ConsumerModule(handler, session=mock_session, **config)
+        consumer.subscription_name = "test-sub"
+        consumer.subscription_password = "test-pass"
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(handler, **config)
-            consumer.subscription_name = "test-sub"
-            consumer.subscription_password = "test-pass"
-
-            consumer.process_one_event()
+        await consumer.process_one_event()
 
         handler.handle_event.assert_not_called()
 
-    def test_step_does_not_acknowledge_on_handler_failure(
+    @pytest.mark.asyncio
+    async def test_step_does_not_acknowledge_on_handler_failure(
         self, mock_logger, tmp_path, mock_session, sample_event
     ):
         handler = MagicMock()
+        handler.is_relevant = AsyncMock(return_value=True)
+        handler.handle_event = AsyncMock(return_value=False)
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
@@ -1044,26 +1058,18 @@ class TestConsumerModuleStep:
 
         mock_session.get.return_value.status_code = 200
         mock_session.get.return_value.json.return_value = sample_event
+        mock_session.patch.return_value.status_code = 200
 
-        handler.handle_event.return_value = False
+        consumer = ConsumerModule(handler, session=mock_session, **config)
+        consumer.subscription_name = "test-sub"
+        consumer.subscription_password = "test-pass"
 
-        mock_patch_response = MagicMock()
-        mock_patch_response.status_code = 200
-        mock_session.patch.return_value = mock_patch_response
-
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(handler, **config)
-            consumer.subscription_name = "test-sub"
-            consumer.subscription_password = "test-pass"
-
-            consumer.process_one_event()
+        await consumer.process_one_event()
 
         mock_session.patch.assert_not_called()
 
-    def test_step_with_custom_long_polling_timeout(
+    @pytest.mark.asyncio
+    async def test_step_with_custom_long_polling_timeout(
         self, mock_logger, tmp_path, mock_session
     ):
         handler = MagicMock()
@@ -1076,15 +1082,11 @@ class TestConsumerModuleStep:
         mock_session.get.return_value.status_code = 200
         mock_session.get.return_value.json.return_value = None
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(handler, **config)
-            consumer.subscription_name = "test-sub"
-            consumer.subscription_password = "test-pass"
+        consumer = ConsumerModule(handler, session=mock_session, **config)
+        consumer.subscription_name = "test-sub"
+        consumer.subscription_password = "test-pass"
 
-            consumer.process_one_event(long_polling_timeout=30)
+        await consumer.process_one_event(long_polling_timeout=30)
 
         mock_session.get.assert_called_once()
         call_args = mock_session.get.call_args
@@ -1092,6 +1094,7 @@ class TestConsumerModuleStep:
 
 
 class TestConsumerModuleFetchEvent:
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("sub_name,sub_password", [
         (None, "somepass"),   # missing name
         ("somename", None),   # missing password
@@ -1099,7 +1102,7 @@ class TestConsumerModuleFetchEvent:
         ("", "somepass"),     # empty string name
         ("somename", ""),     # empty string password
     ])
-    def test_fetch_event_raises_when_credentials_missing(
+    async def test_fetch_event_raises_when_credentials_missing(
         self, tmp_path, mock_session, sub_name, sub_password
     ):
         """_fetch_event raises QueueAccessError for any falsy credential."""
@@ -1110,18 +1113,15 @@ class TestConsumerModuleFetchEvent:
             "config_dir": str(tmp_path),
         }
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(**config)
-            consumer.subscription_name = sub_name
-            consumer.subscription_password = sub_password
+        consumer = ConsumerModule(**config)
+        consumer.subscription_name = sub_name
+        consumer.subscription_password = sub_password
 
-            with pytest.raises(QueueAccessError):
-                consumer._fetch_event(10)
+        with pytest.raises(QueueAccessError):
+            await consumer._fetch_event(10)
 
-    def test_fetch_event_raises_when_no_credentials(
+    @pytest.mark.asyncio
+    async def test_fetch_event_raises_when_no_credentials(
         self, mock_logger, tmp_path, mock_session
     ):
         config = {
@@ -1131,18 +1131,15 @@ class TestConsumerModuleFetchEvent:
             "config_dir": str(tmp_path),
         }
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(**config)
-            consumer.subscription_name = None
-            consumer.subscription_password = "somepass"
+        consumer = ConsumerModule(**config)
+        consumer.subscription_name = None
+        consumer.subscription_password = "somepass"
 
-            with pytest.raises(QueueAccessError):
-                consumer._fetch_event(10)
+        with pytest.raises(QueueAccessError):
+            await consumer._fetch_event(10)
 
-    def test_fetch_event_raises_when_no_password(
+    @pytest.mark.asyncio
+    async def test_fetch_event_raises_when_no_password(
         self, mock_logger, tmp_path, mock_session
     ):
         config = {
@@ -1152,18 +1149,15 @@ class TestConsumerModuleFetchEvent:
             "config_dir": str(tmp_path),
         }
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(**config)
-            consumer.subscription_name = "somename"
-            consumer.subscription_password = None
+        consumer = ConsumerModule(**config)
+        consumer.subscription_name = "somename"
+        consumer.subscription_password = None
 
-            with pytest.raises(QueueAccessError):
-                consumer._fetch_event(10)
+        with pytest.raises(QueueAccessError):
+            await consumer._fetch_event(10)
 
-    def test_fetch_event_returns_event_on_success(
+    @pytest.mark.asyncio
+    async def test_fetch_event_returns_event_on_success(
         self, mock_logger, tmp_path, mock_session, sample_event
     ):
         config = {
@@ -1176,18 +1170,15 @@ class TestConsumerModuleFetchEvent:
         mock_session.get.return_value.status_code = 200
         mock_session.get.return_value.json.return_value = sample_event
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(**config)
-            consumer.subscription_name = "test-sub"
-            consumer.subscription_password = "test-pass"
+        consumer = ConsumerModule(**config, session=mock_session)
+        consumer.subscription_name = "test-sub"
+        consumer.subscription_password = "test-pass"
 
-            event = consumer._fetch_event(10)
-            assert event == sample_event
+        event = await consumer._fetch_event(10)
+        assert event == sample_event
 
-    def test_fetch_event_returns_none_on_empty_queue(
+    @pytest.mark.asyncio
+    async def test_fetch_event_returns_none_on_empty_queue(
         self, tmp_path, mock_session
     ):
         """_fetch_event returns None when queue is empty (200 + null body)."""
@@ -1201,19 +1192,16 @@ class TestConsumerModuleFetchEvent:
         mock_session.get.return_value.status_code = 200
         mock_session.get.return_value.json.return_value = None
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(**config)
-            consumer.subscription_name = "test-sub"
-            consumer.subscription_password = "test-pass"
+        consumer = ConsumerModule(**config, session=mock_session)
+        consumer.subscription_name = "test-sub"
+        consumer.subscription_password = "test-pass"
 
-            result = consumer._fetch_event(10)
-            assert result is None
+        result = await consumer._fetch_event(10)
+        assert result is None
 
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("timeout_value", [0, 1, 10, 30, 60, 300])
-    def test_fetch_event_passes_timeout_param(self, tmp_path, mock_session, timeout_value):
+    async def test_fetch_event_passes_timeout_param(self, tmp_path, mock_session, timeout_value):
         """_fetch_event sends the timeout value in the GET params."""
         config = {
             "name": "test-consumer",
@@ -1225,20 +1213,17 @@ class TestConsumerModuleFetchEvent:
         mock_session.get.return_value.status_code = 200
         mock_session.get.return_value.json.return_value = None
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(**config)
-            consumer.subscription_name = "test-sub"
-            consumer.subscription_password = "test-pass"
+        consumer = ConsumerModule(**config, session=mock_session)
+        consumer.subscription_name = "test-sub"
+        consumer.subscription_password = "test-pass"
 
-            consumer._fetch_event(timeout_value)
+        await consumer._fetch_event(timeout_value)
 
         call_params = mock_session.get.call_args[1]["params"]
         assert call_params["timeout"] == timeout_value
 
-    def test_fetch_event_url_contains_subscription_name(self, tmp_path, mock_session):
+    @pytest.mark.asyncio
+    async def test_fetch_event_url_contains_subscription_name(self, tmp_path, mock_session):
         """_fetch_event builds the URL using the subscription name."""
         config = {
             "name": "test-consumer",
@@ -1250,20 +1235,17 @@ class TestConsumerModuleFetchEvent:
         mock_session.get.return_value.status_code = 200
         mock_session.get.return_value.json.return_value = None
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(**config)
-            consumer.subscription_name = "my-unique-sub"
-            consumer.subscription_password = "pass"
+        consumer = ConsumerModule(**config, session=mock_session)
+        consumer.subscription_name = "my-unique-sub"
+        consumer.subscription_password = "pass"
 
-            consumer._fetch_event(10)
+        await consumer._fetch_event(10)
 
         called_url = mock_session.get.call_args[0][0]
         assert "my-unique-sub" in called_url
 
-    def test_fetch_event_raises_on_non_200(self, mock_logger, tmp_path, mock_session):
+    @pytest.mark.asyncio
+    async def test_fetch_event_raises_on_non_200(self, mock_logger, tmp_path, mock_session):
         config = {
             "name": "test-consumer",
             "provisioning_url": "https://example.com",
@@ -1274,17 +1256,14 @@ class TestConsumerModuleFetchEvent:
         mock_session.get.return_value.status_code = 401
         mock_session.get.return_value.text = "Unauthorized"
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(**config)
-            consumer.subscription_name = "test-sub"
-            consumer.subscription_password = "test-pass"
+        consumer = ConsumerModule(**config, session=mock_session)
+        consumer.subscription_name = "test-sub"
+        consumer.subscription_password = "test-pass"
 
-            with pytest.raises(QueueAccessError):
-                consumer._fetch_event(10)
+        with pytest.raises(QueueAccessError):
+            await consumer._fetch_event(10)
 
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("status_code,error_text", [
         (400, "Bad Request"),
         (401, "Unauthorized"),
@@ -1295,7 +1274,7 @@ class TestConsumerModuleFetchEvent:
         (502, "Bad Gateway"),
         (503, "Service Unavailable"),
     ])
-    def test_fetch_event_raises_on_error_status(
+    async def test_fetch_event_raises_on_error_status(
         self, tmp_path, mock_session, status_code, error_text
     ):
         """_fetch_event raises QueueAccessError for any non-200 HTTP status."""
@@ -1309,18 +1288,15 @@ class TestConsumerModuleFetchEvent:
         mock_session.get.return_value.status_code = status_code
         mock_session.get.return_value.text = error_text
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(**config)
-            consumer.subscription_name = "test-sub"
-            consumer.subscription_password = "test-pass"
+        consumer = ConsumerModule(**config, session=mock_session)
+        consumer.subscription_name = "test-sub"
+        consumer.subscription_password = "test-pass"
 
-            with pytest.raises(QueueAccessError):
-                consumer._fetch_event(10)
+        with pytest.raises(QueueAccessError):
+            await consumer._fetch_event(10)
 
-    def test_fetch_event_raises_on_400_bad_request(
+    @pytest.mark.asyncio
+    async def test_fetch_event_raises_on_400_bad_request(
         self, mock_logger, tmp_path, mock_session
     ):
         config = {
@@ -1333,18 +1309,15 @@ class TestConsumerModuleFetchEvent:
         mock_session.get.return_value.status_code = 400
         mock_session.get.return_value.text = "Bad Request"
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(**config)
-            consumer.subscription_name = "test-sub"
-            consumer.subscription_password = "test-pass"
+        consumer = ConsumerModule(**config, session=mock_session)
+        consumer.subscription_name = "test-sub"
+        consumer.subscription_password = "test-pass"
 
-            with pytest.raises(QueueAccessError):
-                consumer._fetch_event(10)
+        with pytest.raises(QueueAccessError):
+            await consumer._fetch_event(10)
 
-    def test_fetch_event_raises_on_403_forbidden(
+    @pytest.mark.asyncio
+    async def test_fetch_event_raises_on_403_forbidden(
         self, mock_logger, tmp_path, mock_session
     ):
         config = {
@@ -1357,18 +1330,15 @@ class TestConsumerModuleFetchEvent:
         mock_session.get.return_value.status_code = 403
         mock_session.get.return_value.text = "Forbidden"
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(**config)
-            consumer.subscription_name = "test-sub"
-            consumer.subscription_password = "test-pass"
+        consumer = ConsumerModule(**config, session=mock_session)
+        consumer.subscription_name = "test-sub"
+        consumer.subscription_password = "test-pass"
 
-            with pytest.raises(QueueAccessError):
-                consumer._fetch_event(10)
+        with pytest.raises(QueueAccessError):
+            await consumer._fetch_event(10)
 
-    def test_fetch_event_raises_on_404_not_found(
+    @pytest.mark.asyncio
+    async def test_fetch_event_raises_on_404_not_found(
         self, mock_logger, tmp_path, mock_session
     ):
         config = {
@@ -1381,20 +1351,17 @@ class TestConsumerModuleFetchEvent:
         mock_session.get.return_value.status_code = 404
         mock_session.get.return_value.text = "Not Found"
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(**config)
-            consumer.subscription_name = "test-sub"
-            consumer.subscription_password = "test-pass"
+        consumer = ConsumerModule(**config, session=mock_session)
+        consumer.subscription_name = "test-sub"
+        consumer.subscription_password = "test-pass"
 
-            with pytest.raises(QueueAccessError):
-                consumer._fetch_event(10)
+        with pytest.raises(QueueAccessError):
+            await consumer._fetch_event(10)
 
 
 class TestConsumerModuleAcknowledgeEvent:
-    def test_acknowledge_event_calls_correct_endpoint(
+    @pytest.mark.asyncio
+    async def test_acknowledge_event_calls_correct_endpoint(
         self, mock_logger, tmp_path, mock_session
     ):
         config = {
@@ -1404,28 +1371,23 @@ class TestConsumerModuleAcknowledgeEvent:
             "config_dir": str(tmp_path),
         }
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_session.patch.return_value = mock_response
+        mock_session.patch.return_value.status_code = 200
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(**config)
-            consumer.subscription_name = "test-sub"
-            consumer.subscription_password = "test-pass"
+        consumer = ConsumerModule(**config, session=mock_session)
+        consumer.subscription_name = "test-sub"
+        consumer.subscription_password = "test-pass"
 
-            event = {"sequence_number": 123}
-            consumer._acknowledge_event(event)
+        event = {"sequence_number": 123}
+        await consumer._acknowledge_event(event)
 
         mock_session.patch.assert_called_once()
         call_args = mock_session.patch.call_args
         assert "123" in call_args[0][0]
         assert call_args[1]["json"] == {"status": "ok"}
 
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("seq_num", [0, 1, 42, 999, 2**31 - 1])
-    def test_acknowledge_event_url_contains_sequence_number(
+    async def test_acknowledge_event_url_contains_sequence_number(
         self, tmp_path, mock_session, seq_num
     ):
         """_acknowledge_event encodes the sequence_number in the PATCH URL."""
@@ -1436,25 +1398,20 @@ class TestConsumerModuleAcknowledgeEvent:
             "config_dir": str(tmp_path),
         }
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_session.patch.return_value = mock_response
+        mock_session.patch.return_value.status_code = 200
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(**config)
-            consumer.subscription_name = "test-sub"
-            consumer.subscription_password = "test-pass"
+        consumer = ConsumerModule(**config, session=mock_session)
+        consumer.subscription_name = "test-sub"
+        consumer.subscription_password = "test-pass"
 
-            consumer._acknowledge_event({"sequence_number": seq_num})
+        await consumer._acknowledge_event({"sequence_number": seq_num})
 
         called_url = mock_session.patch.call_args[0][0]
         assert str(seq_num) in called_url
 
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("status_code", [400, 404, 500, 503])
-    def test_acknowledge_event_does_not_raise_on_failure(
+    async def test_acknowledge_event_does_not_raise_on_failure(
         self, tmp_path, mock_session, status_code
     ):
         """_acknowledge_event must not raise even if PATCH fails."""
@@ -1468,20 +1425,17 @@ class TestConsumerModuleAcknowledgeEvent:
         mock_response = MagicMock()
         mock_response.status_code = status_code
         mock_response.text = "Error"
-        mock_session.patch.return_value = mock_response
+        mock_session.patch = AsyncMock(return_value=mock_response)
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(**config)
-            consumer.subscription_name = "test-sub"
-            consumer.subscription_password = "test-pass"
+        consumer = ConsumerModule(**config, session=mock_session)
+        consumer.subscription_name = "test-sub"
+        consumer.subscription_password = "test-pass"
 
-            # Must not raise
-            consumer._acknowledge_event({"sequence_number": 1})
+        # Must not raise
+        await consumer._acknowledge_event({"sequence_number": 1})
 
-    def test_acknowledge_event_logs_error_on_failure(
+    @pytest.mark.asyncio
+    async def test_acknowledge_event_logs_error_on_failure(
         self, mock_logger, tmp_path, mock_session
     ):
         handler = MagicMock()
@@ -1494,22 +1448,19 @@ class TestConsumerModuleAcknowledgeEvent:
         mock_response = MagicMock()
         mock_response.status_code = 500
         mock_response.text = "Server Error"
-        mock_session.patch.return_value = mock_response
+        mock_session.patch = AsyncMock(return_value=mock_response)
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(handler, **config)
-            consumer.subscription_name = "test-sub"
-            consumer.subscription_password = "test-pass"
+        consumer = ConsumerModule(handler, session=mock_session, **config)
+        consumer.subscription_name = "test-sub"
+        consumer.subscription_password = "test-pass"
 
-            event = {"sequence_number": 123}
-            consumer._acknowledge_event(event)
+        event = {"sequence_number": 123}
+        await consumer._acknowledge_event(event)
 
         assert mock_response.status_code != 200
 
-    def test_acknowledge_event_missing_sequence_number(
+    @pytest.mark.asyncio
+    async def test_acknowledge_event_missing_sequence_number(
         self, mock_logger, tmp_path, mock_session
     ):
         handler = MagicMock()
@@ -1519,23 +1470,18 @@ class TestConsumerModuleAcknowledgeEvent:
             "config_dir": str(tmp_path),
         }
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_session.patch.return_value = mock_response
+        mock_session.patch.return_value.status_code = 200
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(handler, **config)
-            consumer.subscription_name = "test-sub"
-            consumer.subscription_password = "test-pass"
+        consumer = ConsumerModule(handler, session=mock_session, **config)
+        consumer.subscription_name = "test-sub"
+        consumer.subscription_password = "test-pass"
 
-            event = {}
-            with pytest.raises(KeyError):
-                consumer._acknowledge_event(event)
+        event = {}
+        with pytest.raises(KeyError):
+            await consumer._acknowledge_event(event)
 
-    def test_acknowledge_event_uses_credentials_as_auth(self, tmp_path, mock_session):
+    @pytest.mark.asyncio
+    async def test_acknowledge_event_uses_credentials_as_auth(self, tmp_path, mock_session):
         """_acknowledge_event passes subscription credentials as HTTP auth."""
         config = {
             "name": "test-consumer",
@@ -1544,26 +1490,21 @@ class TestConsumerModuleAcknowledgeEvent:
             "config_dir": str(tmp_path),
         }
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_session.patch.return_value = mock_response
+        mock_session.patch.return_value.status_code = 200
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(**config)
-            consumer.subscription_name = "my-sub"
-            consumer.subscription_password = "my-secret"
+        consumer = ConsumerModule(**config, session=mock_session)
+        consumer.subscription_name = "my-sub"
+        consumer.subscription_password = "my-secret"
 
-            consumer._acknowledge_event({"sequence_number": 1})
+        await consumer._acknowledge_event({"sequence_number": 1})
 
         patch_kwargs = mock_session.patch.call_args[1]
         assert patch_kwargs["auth"] == ("my-sub", "my-secret")
 
 
 class TestConsumerModuleLoop:
-    def test_loop_calls_step_endlessly(self, mock_logger, tmp_path, mock_session):
+    @pytest.mark.asyncio
+    async def test_loop_calls_step_endlessly(self, mock_logger, tmp_path, mock_session):
         handler = MagicMock()
         config = {
             "name": "test-consumer",
@@ -1573,7 +1514,7 @@ class TestConsumerModuleLoop:
 
         call_count = 0
 
-        def step_side_effect():
+        async def step_side_effect():
             nonlocal call_count
             call_count += 1
             if call_count >= 3:
@@ -1583,11 +1524,12 @@ class TestConsumerModuleLoop:
         consumer.process_one_event = step_side_effect
 
         with pytest.raises(SystemExit):
-            consumer.consume_loop()
+            await consumer.consume_loop()
 
         assert call_count == 3
 
-    def test_loop_sleeps_on_queue_access_error(self, tmp_path, mock_session):
+    @pytest.mark.asyncio
+    async def test_loop_sleeps_on_queue_access_error(self, tmp_path, mock_session):
         handler = MagicMock()
         mock_consumer_logger = MagicMock()
 
@@ -1603,7 +1545,7 @@ class TestConsumerModuleLoop:
 
         call_count = 0
 
-        def step_side_effect():
+        async def step_side_effect():
             nonlocal call_count
             call_count += 1
             if call_count >= 2:
@@ -1612,16 +1554,17 @@ class TestConsumerModuleLoop:
 
         consumer.process_one_event = step_side_effect
 
-        with patch("provisioning_consumer_lib.consumer.time.sleep") as mock_sleep:
+        with patch("provisioning_consumer_lib.consumer.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
             with pytest.raises(SystemExit):
-                consumer.consume_loop()
+                await consumer.consume_loop()
 
         assert mock_sleep.call_count >= 1
         mock_consumer_logger.critical.assert_called()
         mock_consumer_logger.error.assert_called()
 
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("error_timeout", [0, 1, 30, 120])
-    def test_loop_sleeps_for_configured_duration(self, tmp_path, mock_session, error_timeout):
+    async def test_loop_sleeps_for_configured_duration(self, tmp_path, mock_session, error_timeout):
         """consume_loop() sleeps for exactly error_timeout seconds."""
         handler = MagicMock()
         config = {
@@ -1635,7 +1578,7 @@ class TestConsumerModuleLoop:
 
         call_count = 0
 
-        def step_side_effect():
+        async def step_side_effect():
             nonlocal call_count
             call_count += 1
             if call_count >= 2:
@@ -1644,13 +1587,14 @@ class TestConsumerModuleLoop:
 
         consumer.process_one_event = step_side_effect
 
-        with patch("provisioning_consumer_lib.consumer.time.sleep") as mock_sleep:
+        with patch("provisioning_consumer_lib.consumer.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
             with pytest.raises(SystemExit):
-                consumer.consume_loop()
+                await consumer.consume_loop()
 
         mock_sleep.assert_called_with(error_timeout)
 
-    def test_loop_propagates_system_exit(self, tmp_path, mock_session):
+    @pytest.mark.asyncio
+    async def test_loop_propagates_system_exit(self, tmp_path, mock_session):
         """consume_loop() lets SystemExit propagate without catching it."""
         handler = MagicMock()
         config = {
@@ -1660,10 +1604,10 @@ class TestConsumerModuleLoop:
         }
 
         consumer = ConsumerModule(handler, session=mock_session, **config)
-        consumer.process_one_event = MagicMock(side_effect=SystemExit(42))
+        consumer.process_one_event = AsyncMock(side_effect=SystemExit(42))
 
         with pytest.raises(SystemExit) as exc_info:
-            consumer.consume_loop()
+            await consumer.consume_loop()
 
         assert exc_info.value.code == 42
 
@@ -1671,13 +1615,14 @@ class TestConsumerModuleLoop:
 class TestConsumerModuleProcessOneEvent:
     """Tests for process_one_event() focusing on is_relevant() and event-handling paths."""
 
-    def test_irrelevant_event_is_acknowledged_and_skipped(
+    @pytest.mark.asyncio
+    async def test_irrelevant_event_is_acknowledged_and_skipped(
         self, tmp_path, mock_session, sample_event
     ):
         """If is_relevant() returns False, the event is acknowledged without calling handle_event."""
         handler = MagicMock()
-        handler.is_relevant.return_value = False
-        handler.handle_event.return_value = True
+        handler.is_relevant = AsyncMock(return_value=False)
+        handler.handle_event = AsyncMock(return_value=True)
 
         config = {
             "name": "test-consumer",
@@ -1688,26 +1633,24 @@ class TestConsumerModuleProcessOneEvent:
         event_with_seq = {**sample_event, "sequence_number": 99}
         mock_session.get.return_value.status_code = 200
         mock_session.get.return_value.json.return_value = event_with_seq
+        mock_session.patch.return_value.status_code = 200
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(handler, **config)
-            consumer.subscription_name = "sub"
-            consumer.subscription_password = "pass"
-            consumer.process_one_event()
+        consumer = ConsumerModule(handler, session=mock_session, **config)
+        consumer.subscription_name = "sub"
+        consumer.subscription_password = "pass"
+        await consumer.process_one_event()
 
         handler.handle_event.assert_not_called()
         mock_session.patch.assert_called_once()  # acknowledged
 
-    def test_relevant_successful_event_is_acknowledged(
+    @pytest.mark.asyncio
+    async def test_relevant_successful_event_is_acknowledged(
         self, tmp_path, mock_session, sample_event
     ):
         """If is_relevant() is True and handle_event() returns True → event is acknowledged."""
         handler = MagicMock()
-        handler.is_relevant.return_value = True
-        handler.handle_event.return_value = True
+        handler.is_relevant = AsyncMock(return_value=True)
+        handler.handle_event = AsyncMock(return_value=True)
 
         config = {
             "name": "test-consumer",
@@ -1718,26 +1661,24 @@ class TestConsumerModuleProcessOneEvent:
         event_with_seq = {**sample_event, "sequence_number": 55}
         mock_session.get.return_value.status_code = 200
         mock_session.get.return_value.json.return_value = event_with_seq
+        mock_session.patch.return_value.status_code = 200
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(handler, **config)
-            consumer.subscription_name = "sub"
-            consumer.subscription_password = "pass"
-            consumer.process_one_event()
+        consumer = ConsumerModule(handler, session=mock_session, **config)
+        consumer.subscription_name = "sub"
+        consumer.subscription_password = "pass"
+        await consumer.process_one_event()
 
         handler.handle_event.assert_called_once()
         mock_session.patch.assert_called_once()  # acknowledged
 
-    def test_failed_event_is_not_acknowledged(
+    @pytest.mark.asyncio
+    async def test_failed_event_is_not_acknowledged(
         self, tmp_path, mock_session, sample_event
     ):
         """If handle_event() returns False, the event is NOT acknowledged (will be retried)."""
         handler = MagicMock()
-        handler.is_relevant.return_value = True
-        handler.handle_event.return_value = False
+        handler.is_relevant = AsyncMock(return_value=True)
+        handler.handle_event = AsyncMock(return_value=False)
 
         config = {
             "name": "test-consumer",
@@ -1748,18 +1689,15 @@ class TestConsumerModuleProcessOneEvent:
         mock_session.get.return_value.status_code = 200
         mock_session.get.return_value.json.return_value = sample_event
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(handler, **config)
-            consumer.subscription_name = "sub"
-            consumer.subscription_password = "pass"
-            consumer.process_one_event()
+        consumer = ConsumerModule(handler, session=mock_session, **config)
+        consumer.subscription_name = "sub"
+        consumer.subscription_password = "pass"
+        await consumer.process_one_event()
 
         mock_session.patch.assert_not_called()
 
-    def test_process_one_event_raises_queue_access_error_on_fetch_failure(
+    @pytest.mark.asyncio
+    async def test_process_one_event_raises_queue_access_error_on_fetch_failure(
         self, tmp_path, mock_session
     ):
         """process_one_event() propagates QueueAccessError from _fetch_event."""
@@ -1773,16 +1711,12 @@ class TestConsumerModuleProcessOneEvent:
         mock_session.get.return_value.status_code = 500
         mock_session.get.return_value.text = "error"
 
-        with patch(
-            "provisioning_consumer_lib.consumer.requests.Session",
-            return_value=mock_session,
-        ):
-            consumer = ConsumerModule(handler, **config)
-            consumer.subscription_name = "sub"
-            consumer.subscription_password = "pass"
+        consumer = ConsumerModule(handler, session=mock_session, **config)
+        consumer.subscription_name = "sub"
+        consumer.subscription_password = "pass"
 
-            with pytest.raises(QueueAccessError):
-                consumer.process_one_event()
+        with pytest.raises(QueueAccessError):
+            await consumer.process_one_event()
 
 
 class TestDN:

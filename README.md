@@ -29,43 +29,56 @@ Container images built with the provided `Dockerfile` will be [distroless](https
 
 ### 1. Implement your event handler
 
-Edit `src/provisioning_consumer/main.py` and subclass `UDMEventHandler`:
+Edit `src/provisioning_consumer/main.py` and subclass `UDMEventHandler`. All handler methods are `async`:
 
 ```python
-from provisioning_consumer_lib import ConsumerModule, UDMEventHandler, AttributeMapping
+import asyncio
+from provisioning_consumer_lib import ConsumerModule, UDMEventHandler, Metadata, AttributeMapping
 
 class MyEventHandler(UDMEventHandler):
-    def _handle_create(self, metadata: AttributeMapping, new: AttributeMapping) -> None:
+    async def _handle_create(self, metadata: Metadata, new: AttributeMapping) -> None:
         ...
 
-    def _handle_modify(self, metadata: AttributeMapping, old: AttributeMapping,
-                       new: AttributeMapping, has_moved: bool) -> None:
+    async def _handle_modify(self, metadata: Metadata, old: AttributeMapping,
+                             new: AttributeMapping, has_moved: bool) -> None:
         ...
 
-    def _handle_remove(self, metadata: AttributeMapping, old: AttributeMapping) -> None:
+    async def _handle_remove(self, metadata: Metadata, old: AttributeMapping) -> None:
+        ...
+
+    # Optional — filter events before processing:
+    async def is_relevant(self, event) -> bool:
+        ...
+
+    # Optional — custom error handling:
+    async def _handle_error(self, metadata, old, new, exc_type, exc_value, exc_traceback) -> None:
         ...
 ```
 
 ### 2. Wire up `ConsumerModule` and run
 
 ```python
+import asyncio
 from loguru import logger
 
-def main() -> None:
+async def main() -> None:
     handler = MyEventHandler(logger)
-    consumer = ConsumerModule(
+    async with ConsumerModule(
         handler=handler,
         name="my-consumer",
         provisioning_url="https://<nubus-fqdn>/univention/provisioning/",
         config_dir="/var/lib/univention/consumer",
-    )
-    consumer.subscribe(
-        admin_username="provisioning_admin",
-        admin_password="<password>",
-        topics=[{"realm": "udm", "topic": "users/user"}],
-        prefill=True,
-    )
-    consumer.consume_loop()
+    ) as consumer:
+        await consumer.subscribe(
+            admin_username="provisioning_admin",
+            admin_password="<password>",
+            topics=[{"realm": "udm", "topic": "users/user"}],
+            prefill=True,
+        )
+        await consumer.consume_loop()
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ## Prerequisites

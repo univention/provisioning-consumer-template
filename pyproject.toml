@@ -6,11 +6,13 @@ requires-python = ">=3.11"
 dependencies = [
     "provisioning-consumer-lib",
     "loguru",
+    "httpx>=0.28.1",
 ]
 
 [project.optional-dependencies]
 test = [
     "pytest>=8.0",
+    "pytest-asyncio>=0.24",
     "pytest-mock>=3.14",
 ]
 
@@ -27,7 +29,14 @@ packages = ["src/provisioning_consumer"]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest-asyncio>=0.24",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
+asyncio_mode = "auto"

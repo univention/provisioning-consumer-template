@@ -5,7 +5,7 @@ description = "Library for provisioning consumer event handling and DN parsing"
 requires-python = ">=3.11"
 dependencies = [
     "ldap3",
-    "requests>=2.32.0",
+    "httpx>=0.27.0",
     "loguru",
     "typing-extensions",
 ]
@@ -16,6 +16,7 @@ python-ldap = [
 ]
 test = [
     "pytest>=8.0",
+    "pytest-asyncio>=0.24",
     "pytest-mock>=3.14",
 ]
 

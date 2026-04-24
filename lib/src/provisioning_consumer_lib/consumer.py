@@ -1,19 +1,19 @@
 # SPDX-FileCopyrightText: 2026 Univention GmbH
 # SPDX-License-Identifier: AGPL-3.0-only
 
+import asyncio
 import copy
 import json
 import os
 import secrets
 import sys
-import time
 import types
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, TypedDict, TypeAlias
+from typing import Any, TypedDict, TypeAlias, cast
 from .dn import DN
 
+import httpx
 import loguru
-import requests
 from loguru._logger import Logger
 from typing_extensions import override
 
@@ -68,14 +68,14 @@ class EventHandler:
     def __init__(self, logger: Logger | None, *args, **kwargs) -> None:
         self.logger: Logger = logger if logger is not None else loguru.logger
 
-    def is_relevant(self, event: QueryEventObject) -> bool:
+    async def is_relevant(self, event: QueryEventObject) -> bool:
         """
         Indicates if the event shall be processed by handle_event().
         Can be used to filter the events.
         """
         return True
 
-    def handle_event(self, event: QueryEventObject) -> bool:
+    async def handle_event(self, event: QueryEventObject) -> bool:
         """
         Calls the handler functions depending on the event type.
 
@@ -87,7 +87,7 @@ class EventHandler:
 
 class UDMEventHandler(EventHandler):
     @override
-    def handle_event(self, event: QueryEventObject) -> bool:
+    async def handle_event(self, event: QueryEventObject) -> bool:
         """
         Calls the handler functions depending on the event type.
 
@@ -97,16 +97,16 @@ class UDMEventHandler(EventHandler):
         metadata, old, new, has_moved = self._event_to_udm(event)
         try:
             if old and new:
-                self._handle_modify(metadata, old, new, has_moved)
+                await self._handle_modify(metadata, old, new, has_moved)
             elif old:
-                self._handle_remove(metadata, old)
+                await self._handle_remove(metadata, old)
             else:
-                self._handle_create(metadata, new)
+                await self._handle_create(metadata, new)
         except SystemExit:
             raise
         except Exception:  # noqa: E722
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            self._handle_error(metadata, old, new, exc_type, exc_value, exc_traceback)
+            await self._handle_error(metadata, old, new, exc_type, exc_value, exc_traceback)
             return False
         return True
 
@@ -120,8 +120,9 @@ class UDMEventHandler(EventHandler):
         :returns: metadata, old, new
         :rtype: tuple[AttributeMapping, AttributeMapping, AttributeMapping]
         """
-        metadata = copy.deepcopy(event)
-        del metadata["body"]
+        raw = cast(dict[str, Any], copy.deepcopy(event))
+        del raw["body"]
+        metadata = cast(Metadata, raw)
         old = event["body"]["old"]
         new = event["body"]["new"]
         has_moved = False
@@ -131,7 +132,7 @@ class UDMEventHandler(EventHandler):
             has_moved = old_dn != new_dn
         return metadata, old, new, has_moved
 
-    def _handle_create(self, metadata: Metadata, new: AttributeMapping) -> None:
+    async def _handle_create(self, metadata: Metadata, new: AttributeMapping) -> None:
         """
         Called when a new object was created.
 
@@ -140,7 +141,7 @@ class UDMEventHandler(EventHandler):
         """
         raise NotImplementedError
 
-    def _handle_modify(
+    async def _handle_modify(
         self,
         metadata: Metadata,
         old: AttributeMapping,
@@ -159,7 +160,7 @@ class UDMEventHandler(EventHandler):
         """
         raise NotImplementedError
 
-    def _handle_remove(self, metadata: Metadata, old: AttributeMapping) -> None:
+    async def _handle_remove(self, metadata: Metadata, old: AttributeMapping) -> None:
         """
         Called when an object was removed.
 
@@ -168,7 +169,7 @@ class UDMEventHandler(EventHandler):
         """
         raise NotImplementedError
 
-    def _handle_error(
+    async def _handle_error(
         self,
         metadata: Metadata,
         old: AttributeMapping,
@@ -223,7 +224,7 @@ class ConsumerModule:
     def __init__(
         self,
         handler: EventHandler,
-        session: requests.Session | None = None,
+        session: httpx.AsyncClient | None = None,
         logger: Logger | None = None,
         *args,
         **kwargs,
@@ -231,7 +232,7 @@ class ConsumerModule:
         """
         ConsumerModule
         :param EventHandler handler:
-        :param requests.Session session: optional session for HTTP requests (for testing)
+        :param httpx.AsyncClient session: optional async HTTP client (for testing)
         :param kwargs:
            str config_dir: path to configuration directory
            str name: name of the consumer (has to be unique)
@@ -243,14 +244,20 @@ class ConsumerModule:
         self.validate_config()
         self.logger: Logger = logger if logger is not None else loguru.logger
         self.logger.info(f"Starting consumer {self.config['name']}")
-        self.session: requests.Session = (
-            session if session is not None else requests.Session()
+        self.session: httpx.AsyncClient = (
+            session if session is not None else httpx.AsyncClient()
         )
         self.subscription_name: str | None
         self.subscription_password: str | None
         self.subscription_name, self.subscription_password = (
             self._get_subscription_credentials()
         )
+
+    async def __aenter__(self) -> "ConsumerModule":
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        await self.session.aclose()
 
     def validate_config(self):
         if not (isinstance(self.config.get("name"), str) and self.config.get("name")):
@@ -312,7 +319,7 @@ class ConsumerModule:
             json.dump(data, f, indent=2)
         os.rename(fn_new, fn)
 
-    def subscribe(
+    async def subscribe(
         self,
         admin_username: str,
         admin_password: str,
@@ -348,7 +355,7 @@ class ConsumerModule:
             "request_prefill": prefill,
             "password": self.subscription_password,
         }
-        resp = self.session.post(
+        resp = await self.session.post(
             self.config["provisioning_url"] + "/v1/subscriptions",
             json=create_sub_json,
             auth=(admin_username, admin_password),
@@ -363,22 +370,22 @@ class ConsumerModule:
             self.subscription_name, self.subscription_password
         )
 
-    def consume_loop(self):
+    async def consume_loop(self):
         """
         An infinite loop in which events from the provisioning queue are processed.
         """
         self.logger.debug("Starting consumer loop...")
         while True:
             try:
-                self.process_one_event()
+                await self.process_one_event()
             except QueueAccessError as e:
                 self.logger.critical(f"Unable to access provisioning queue: {e}")
                 self.logger.error(
                     f"Sleeping {self.config['error_timeout']}s before continuing"
                 )
-                time.sleep(self.config["error_timeout"])
+                await asyncio.sleep(self.config["error_timeout"])
 
-    def process_one_event(self, long_polling_timeout: int = 10):
+    async def process_one_event(self, long_polling_timeout: int = 10):
         """
         Fetch next event from provisioning queue. If there is no waiting event in the subscribed queue,
         the request does long polling. It either times out after the given number of seconds or
@@ -389,19 +396,19 @@ class ConsumerModule:
         :raise: QueueAccessError is raised, in case the
                 access to the queue is denied or credentials are missing.
         """
-        event = self._fetch_event(long_polling_timeout)
+        event = await self._fetch_event(long_polling_timeout)
         if event:
             self.logger.debug(f"Event {event['sequence_number']} has been fetched.")
-            if not self.handler.is_relevant(event):
+            if not await self.handler.is_relevant(event):
                 self.logger.debug(
                     f"Skipped and acknowledged event {event['sequence_number']} as requested."
                 )
-                self._acknowledge_event(event)
-            elif self.handler.handle_event(event):
+                await self._acknowledge_event(event)
+            elif await self.handler.handle_event(event):
                 self.logger.debug(
                     f"Event {event['sequence_number']} has been processed successfully."
                 )
-                self._acknowledge_event(event)
+                await self._acknowledge_event(event)
             else:
                 self.logger.debug(
                     f"Event {event['sequence_number']} has not been processed."
@@ -413,7 +420,7 @@ class ConsumerModule:
             # for immediate notification of new changes.
             self.logger.debug("Long polling timeout, no more events.")
 
-    def _fetch_event(self, long_polling_timeout: int) -> QueryEventObject | None:
+    async def _fetch_event(self, long_polling_timeout: int) -> QueryEventObject | None:
         """
         Fetch next item from queue.
         :return: event dictionary
@@ -422,7 +429,7 @@ class ConsumerModule:
         """
         if not self.subscription_name or not self.subscription_password:
             raise QueueAccessError("No subscription name or password")
-        resp = self.session.get(
+        resp = await self.session.get(
             f"{self.config['provisioning_url']}/v1/subscriptions/{self.subscription_name}/messages/next",
             params={"timeout": long_polling_timeout},
             auth=(self.subscription_name, self.subscription_password),
@@ -431,7 +438,7 @@ class ConsumerModule:
             raise QueueAccessError(resp.text)
         return resp.json()
 
-    def _acknowledge_event(self, event: QueryEventObject) -> None:
+    async def _acknowledge_event(self, event: QueryEventObject) -> None:
         """
         Acknowledge specified event at provisioning service.
         :param event: the event to be acknowledged
@@ -442,7 +449,7 @@ class ConsumerModule:
         seq_num = event["sequence_number"]
         status_json = {"status": "ok"}
         self.logger.debug(f"Acknowledging event {seq_num}")
-        response = self.session.patch(
+        response = await self.session.patch(
             (
                 f"{self.config['provisioning_url']}/v1/"
                 f"subscriptions/{self.subscription_name}/messages/{seq_num}/status"
