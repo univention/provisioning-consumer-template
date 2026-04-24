@@ -214,6 +214,8 @@ class UDMEventHandler(EventHandler):
         else:
             keyset = set(old) | set(new)
         for key in keyset:
+            # TODO FIXME: set(old.get(key, [])) will raise TypeError at runtime
+            # for any UDM attribute whose values are non-hashable (e.g., list of dicts).
             if set(old.get(key, [])) != set(new.get(key, [])):
                 res[key] = old.get(key), new.get(key)
         return res
