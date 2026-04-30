@@ -200,11 +200,10 @@ class UDMEventHandler(EventHandler):
         cls, event: QueryEventObject, keys: Iterable[str] | None = None
     ) -> dict[str, tuple[Any, Any]]:
         """
-        Find differences in old and new. Returns dict with keys pointing to old
-        and new values.
+        Find differences in old and new of the specified event.
+        Returns dict with keys pointing to old and new values.
 
-        :param dict old: previous UDM objects attributes
-        :param dict new: new UDM objects attributes
+        :param dict event: old and new of the specified event are diffed
         :param list keys: consider only those keys in comparison
         :return: key -> (old[key], new[key]) mapping
         :rtype: dict
@@ -216,15 +215,16 @@ class UDMEventHandler(EventHandler):
         else:
             keyset = set(old) | set(new)
         for key in keyset:
-            # TODO FIXME: set(old.get(key, [])) will raise TypeError at runtime
-            # for any UDM attribute whose values are non-hashable (e.g., list of dicts).
-            old_val = old.get(key, [])
-            new_val = new.get(key, [])
-            try:
-                changed = set(old_val) != set(new_val)
-            except TypeError:
-                # Fall back in case values are non-hashable:
-                # use order-dependent direct comparison
+            old_val = old.get(key)
+            new_val = new.get(key)
+            if isinstance(old_val, list) and isinstance(new_val, list):
+                try:
+                    changed = set(old_val) != set(new_val)
+                except TypeError:
+                    # Fall back in case values are non-hashable:
+                    # use order-dependent direct comparison
+                    changed = old_val != new_val
+            else:
                 changed = old_val != new_val
             if changed:
                 res[key] = old_val, new_val
