@@ -108,6 +108,8 @@ class UDMEventHandler(EventHandler):
         except Exception:  # noqa: E722
             exc_type, exc_value, exc_traceback = sys.exc_info()
             await self._handle_error(metadata, old, new, exc_type, exc_value, exc_traceback)
+            # The following return statement is only reached, if _handle_error does not raise an exception.
+            # It depends on the implemented _handle_error method of (sub)classes.
             return False
         return True
 
