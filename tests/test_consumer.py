@@ -339,6 +339,22 @@ class TestUDMEventHandler:
         for key in expected_absent:
             assert key not in diff_result
 
+    def test_diff_non_hashable_list_values(self):
+        """diff() falls back to != comparison for non-hashable list items."""
+        event = {
+            "uuid": "test-uuid",
+            "timestamp": "2026-01-01T00:00:00Z",
+            "body": {
+                "old": {"dn": "uid=test,dc=example,dc=com", "props": [{"a": 1}, {"b": 2}]},
+                "new": {"dn": "uid=test,dc=example,dc=com", "props": [{"a": 1}, {"c": 3}]},
+            },
+        }
+        diff_result = UDMEventHandler.diff(event)
+        assert "props" in diff_result
+        old_val, new_val = diff_result["props"]
+        assert old_val == [{"a": 1}, {"b": 2}]
+        assert new_val == [{"a": 1}, {"c": 3}]
+
     def test_diff_with_empty_old(self, mock_logger):
         event = {
             "uuid": "test-uuid",
@@ -561,6 +577,26 @@ class TestConsumerModuleInit:
         }
         consumer = ConsumerModule(MagicMock(), logger=custom_logger, **config)
         assert consumer.logger is custom_logger
+
+    @pytest.mark.asyncio
+    async def test_context_manager_calls_session_aclose(self, tmp_path, mock_session, mock_logger):
+        from provisioning_consumer_lib.consumer import EventHandler
+
+        class MockHandler(EventHandler):
+            async def handle_event(self, event):
+                return True
+
+        handler = MockHandler(mock_logger)
+        config = {
+            "name": "test-consumer",
+            "provisioning_url": "https://example.com",
+            "config_dir": str(tmp_path),
+        }
+        async with ConsumerModule(
+            handler, session=mock_session, logger=mock_logger, **config
+        ) as cm:
+            assert isinstance(cm, ConsumerModule)
+        mock_session.aclose.assert_awaited_once()
 
 
 class TestConsumerModuleCredentials:
