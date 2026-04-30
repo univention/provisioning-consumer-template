@@ -14,6 +14,7 @@ test = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
     "pytest-mock>=3.14",
+    "pytest-cov>=6.0",
 ]
 
 [tool.uv.sources]
@@ -40,3 +41,4 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
+addopts = "--cov=provisioning_consumer_lib --cov-report=term-missing"
