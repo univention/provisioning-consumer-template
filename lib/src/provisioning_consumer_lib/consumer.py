@@ -126,8 +126,8 @@ class UDMEventHandler(EventHandler):
         raw = cast(dict[str, Any], copy.deepcopy(event))
         del raw["body"]
         metadata = cast(Metadata, raw)
-        old = event["body"]["old"]
-        new = event["body"]["new"]
+        old = copy.deepcopy(event["body"]["old"])
+        new = copy.deepcopy(event["body"]["new"])
         has_moved = False
         if old and new:
             old_dn = DN(old["dn"])
