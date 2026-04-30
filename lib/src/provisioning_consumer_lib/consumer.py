@@ -218,8 +218,16 @@ class UDMEventHandler(EventHandler):
         for key in keyset:
             # TODO FIXME: set(old.get(key, [])) will raise TypeError at runtime
             # for any UDM attribute whose values are non-hashable (e.g., list of dicts).
-            if set(old.get(key, [])) != set(new.get(key, [])):
-                res[key] = old.get(key), new.get(key)
+            old_val = old.get(key, [])
+            new_val = new.get(key, [])
+            try:
+                changed = set(old_val) != set(new_val)
+            except TypeError:
+                # Fall back in case values are non-hashable:
+                # use order-dependent direct comparison
+                changed = old_val != new_val
+            if changed:
+                res[key] = old_val, new_val
         return res
 
 
