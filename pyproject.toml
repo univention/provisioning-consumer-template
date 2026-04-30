@@ -42,3 +42,11 @@ python_files = ["test_*.py"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
 addopts = "--cov=provisioning_consumer_lib --cov-report=term-missing"
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "raise NotImplementedError\\(\\)",
+    "if __name__ == .__main__.:",
+]

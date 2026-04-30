@@ -83,7 +83,7 @@ class EventHandler:
         :param dict[str, Any] event: event to be processed
         :return: If no exception is thrown by the handler functions, True is returned, else False
         """
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
 
 class UDMEventHandler(EventHandler):
@@ -142,7 +142,7 @@ class UDMEventHandler(EventHandler):
         :param str metadata: metadata of the create event
         :param dict new: new UDM objects attributes
         """
-        raise NotImplementedError
+        raise NotImplementedError  # pragma: no cover
 
     async def _handle_modify(
         self,
@@ -161,7 +161,7 @@ class UDMEventHandler(EventHandler):
         :param dict old: previous UDM objects attributes
         :param dict new: new UDM objects attributes
         """
-        raise NotImplementedError
+        raise NotImplementedError  # pragma: no cover
 
     async def _handle_remove(self, metadata: Metadata, old: AttributeMapping) -> None:
         """
