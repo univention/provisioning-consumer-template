@@ -378,6 +378,9 @@ class ConsumerModule:
         while True:
             try:
                 await self.process_one_event()
+            except httpx.ReadTimeout:
+                self.logger.debug("Long polling timeout reached, retrying...")
+                continue
             except QueueAccessError as e:
                 self.logger.critical(f"Unable to access provisioning queue: {e}")
                 self.logger.error(
