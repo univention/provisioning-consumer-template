@@ -378,7 +378,7 @@ class ConsumerModule:
         while True:
             try:
                 await self.process_one_event()
-            except httpx.ReadTimeout as e:
+            except httpx.ReadTimeout:
                 self.logger.debug("Long polling timeout reached, retrying...")
                 continue
             except QueueAccessError as e:
