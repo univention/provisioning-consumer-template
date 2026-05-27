@@ -19,6 +19,7 @@ from typing_extensions import override
 
 AttributeMapping: TypeAlias = dict[str, Any]
 FILENAME_CONFIG = "provisioning_config.json"
+DEFAULT_REQUEST_TIMEOUT = 5
 DEFAULT_ERROR_TIMEOUT = (
     60  # sleep duration after failed provisioning queue access in seconds
 )
@@ -378,15 +379,14 @@ class ConsumerModule:
         while True:
             try:
                 await self.process_one_event()
-            except httpx.ReadTimeout:
-                self.logger.debug("Long polling timeout reached, retrying...")
-                continue
-            except QueueAccessError as e:
-                self.logger.critical(f"Unable to access provisioning queue: {e}")
+            except (QueueAccessError, httpx.HTTPError) as e:
+                msg = "Unable to access provisioning queue" if isinstance(e, QueueAccessError) else "HTTP Error on request"
+                self.logger.critical(f"{msg}: {e}")
                 self.logger.error(
                     f"Sleeping {self.config['error_timeout']}s before continuing"
                 )
                 await asyncio.sleep(self.config["error_timeout"])
+
 
     async def process_one_event(self, long_polling_timeout: int = 10):
         """
@@ -436,6 +436,7 @@ class ConsumerModule:
             f"{self.config['provisioning_url']}/v1/subscriptions/{self.subscription_name}/messages/next",
             params={"timeout": long_polling_timeout},
             auth=(self.subscription_name, self.subscription_password),
+            timeout=long_polling_timeout+DEFAULT_REQUEST_TIMEOUT
         )
         if resp.status_code != 200:
             raise QueueAccessError(resp.text)
