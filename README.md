@@ -13,6 +13,9 @@ Container images built with the provided `Dockerfile` will be [distroless](https
 .
 ├── Dockerfile
 ├── pyproject.toml          # Template application (provisioning-consumer)
+├── appcenter/
+│   ├── inst                # Join script performing the subscription
+│   └── uinst               # Unjoin script performing the desubscription
 ├── src/
 │   └── provisioning_consumer/
 │       ├── __init__.py
@@ -152,6 +155,18 @@ View output:
 ```bash
 docker logs provisioning-consumer
 ```
+
+## App Center scripts
+
+The `appcenter/` directory contains two scripts that automatically manage the provisioning subscription when the app is installed or removed. Both use `univention-provisioning-tool` — the standard command-line helper for subscribing and unsubscribing from the Provisioning Service.
+
+### `inst` — subscribe on app installation
+
+Runs when the app is installed. It subscribes to provisioning topics (e.g. `users/user`) and saves the resulting subscription config to disk so the consumer can pick it up at runtime. It also requests prefill data, allowing the consumer to catch up on events that occurred before the subscription existed. If the subscription fails, the join script is aborted.
+
+### `uinst` — unsubscribe on app removal
+
+Runs when the app is removed. It reads the subscription config written by `inst` and unsubscribes from all topics. Failures are silently tolerated so that app removal always succeeds.
 
 ## Library documentation
 
