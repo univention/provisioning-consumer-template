@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# SPDX-FileCopyrightText: 2026 Univention GmbH
+#
+# SPDX-License-Identifier: AGPL-3.0-only
+
+## joinscript api: bindpwdfile
+
+#
+#  Join script that runs on the docker host.
+#
+
+VERSION=1
+
+APP_ID="univention-consumer-template"
+
+. /usr/share/univention-join/joinscripthelper.lib || exit 1
+
+
+main () {
+	/usr/sbin/univention-provisioning-tool \
+		subscribe \
+		--topics '[{"realm": "udm", "topic": "users/user"}]' \
+		--subscription-name "${APP_ID}_$(hostname -f)" \
+		--subscription-file "/var/lib/univention-appcenter/apps/${APP_ID}/conf/provisioning/provisioning_config.json" \
+		--force \
+		--request-prefill \
+		--provisioning-server "$(hostname -f)" || die
+}
+
+
+joinscript_init
+
+main "$@"
+
+joinscript_save_current_version
+exit $?
