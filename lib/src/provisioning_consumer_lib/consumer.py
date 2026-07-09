@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Univention GmbH
 # SPDX-License-Identifier: AGPL-3.0-only
 
+from __future__ import annotations
+
 import asyncio
 import copy
 import json
@@ -9,13 +11,15 @@ import secrets
 import sys
 import types
 from collections.abc import Iterable
-from typing import Any, TypedDict, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, TypedDict, TypeAlias, cast
 from .dn import DN
 
 import httpx
 import loguru
-from loguru._logger import Logger
 from typing_extensions import override
+
+if TYPE_CHECKING:
+    from loguru import Logger
 
 AttributeMapping: TypeAlias = dict[str, Any]
 FILENAME_CONFIG = "provisioning_config.json"
