@@ -249,7 +249,7 @@ wheels = [
 
 [[package]]
 name = "provisioning-consumer"
-version = "0.9.8"
+version = "0.9.9"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
@@ -291,7 +291,7 @@ dev = [
 
 [[package]]
 name = "provisioning-consumer-lib"
-version = "0.9.8"
+version = "0.9.9"
 source = { directory = "lib" }
 dependencies = [
     { name = "httpx" },
