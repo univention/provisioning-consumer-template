@@ -1,6 +1,6 @@
 [project]
 name = "provisioning-consumer"
-version = "0.9.8"
+version = "0.9.9"
 description = "A Provisioning consumer application (template)"
 requires-python = ">=3.11"
 dependencies = [
